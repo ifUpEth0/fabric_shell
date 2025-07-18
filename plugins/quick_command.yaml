@@ -1,0 +1,30 @@
+# plugins/quick_command.yaml
+name: quick_command
+description: Generate and execute single-line commands for immediate tasks
+category: automation
+parameters:
+  task:
+    type: string
+    prompt: "What do you want to accomplish?"
+    required: true
+  shell_preference:
+    type: string
+    prompt: "Preferred shell (leave blank for auto-detect)"
+    default: ""
+prompt: |
+  Generate a single command line to accomplish: {task}
+  
+  Shell preference: {shell_preference}
+  
+  Requirements:
+  - Single line only
+  - Safe to execute
+  - Include basic error handling if possible
+  - Use appropriate shell syntax
+  
+  Respond with ONLY the command, no explanation.
+context: |
+  You are a command-line expert. Generate efficient, safe one-liner commands for immediate execution.
+post_process:
+  type: execute
+  confirm: true

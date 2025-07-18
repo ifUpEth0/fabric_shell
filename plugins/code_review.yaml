@@ -1,0 +1,25 @@
+# plugins/code_review.yaml
+name: code_review
+description: Review code for best practices, security, and performance
+category: development
+parameters:
+  code_file:
+    type: file
+    prompt: "Enter path to code file"
+    required: true
+  language:
+    type: string
+    prompt: "Programming language"
+    default: "auto-detect"
+prompt: |
+  Review this {language} code and provide:
+  1. Code quality assessment
+  2. Security vulnerabilities
+  3. Performance improvements
+  4. Best practice recommendations
+  5. Refactoring suggestions
+  
+  Code:
+  {code_file}
+context: |
+  You are an experienced software engineer conducting a code review. Be thorough but constructive.

@@ -1,0 +1,27 @@
+# plugins/troubleshooter.yaml
+name: troubleshooter
+description: Diagnose and troubleshoot system issues
+category: system
+parameters:
+  problem_description:
+    type: string
+    prompt: "Describe the problem you're experiencing"
+    required: true
+  error_logs:
+    type: string
+    prompt: "Any error messages or log entries (optional)"
+    default: ""
+prompt: |
+  Troubleshoot this system issue:
+  
+  Problem: {problem_description}
+  
+  Error logs: {error_logs}
+  
+  Provide:
+  1. Possible root causes
+  2. Diagnostic commands to run
+  3. Step-by-step troubleshooting plan
+  4. Preventive measures
+context: |
+  You are a senior system administrator with expertise in troubleshooting complex technical issues.

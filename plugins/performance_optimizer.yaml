@@ -1,0 +1,26 @@
+# plugins/performance_optimizer.yaml
+name: performance_optimizer
+description: Analyze system performance and suggest optimizations
+category: performance
+parameters:
+  target_system:
+    type: string
+    prompt: "Target system (web server, database, application, etc.)"
+    required: true
+  current_metrics:
+    type: string
+    prompt: "Current performance metrics or issues"
+    required: true
+prompt: |
+  Analyze performance issues for {target_system}:
+  
+  Current metrics/issues:
+  {current_metrics}
+  
+  Provide:
+  1. Performance bottleneck analysis
+  2. Optimization recommendations
+  3. Monitoring suggestions
+  4. Implementation priority
+context: |
+  You are a performance engineering expert. Provide practical, measurable optimization strategies.

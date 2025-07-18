@@ -1,0 +1,23 @@
+# plugins/log_analyzer.yaml
+name: log_analyzer
+description: Analyze log files for errors, warnings, and patterns
+category: system
+parameters:
+  log_file:
+    type: file
+    prompt: "Enter path to log file"
+    required: true
+prompt: |
+  Analyze this log file and provide:
+  1. Summary of errors and warnings
+  2. Most common issues
+  3. Recommendations for investigation
+  4. Any suspicious patterns
+  
+  Log content:
+  {log_file}
+context: |
+  You are a system administrator analyzing log files. Focus on actionable insights.
+examples:
+  - "/var/log/syslog"
+  - "/var/log/apache2/error.log"

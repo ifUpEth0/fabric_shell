@@ -1,0 +1,32 @@
+# plugins/deployment_planner.yaml
+name: deployment_planner
+description: Plan application deployments with best practices
+category: deployment
+parameters:
+  application_type:
+    type: string
+    prompt: "Application type (web app, API, database, etc.)"
+    required: true
+  environment:
+    type: string
+    prompt: "Target environment (dev, staging, production)"
+    required: true
+  requirements:
+    type: string
+    prompt: "Special requirements or constraints"
+    default: "standard deployment"
+prompt: |
+  Create a deployment plan for:
+  
+  Application: {application_type}
+  Environment: {environment}
+  Requirements: {requirements}
+  
+  Include:
+  1. Pre-deployment checklist
+  2. Deployment steps
+  3. Rollback plan
+  4. Post-deployment verification
+  5. Monitoring setup
+context: |
+  You are a DevOps engineer planning a production deployment. Focus on reliability and safety.

@@ -1,0 +1,33 @@
+# plugins/file_operations.yaml
+name: file_operations
+description: Generate commands for file and directory operations
+category: system
+parameters:
+  operation_type:
+    type: string
+    prompt: "Operation type (find, copy, move, delete, permissions, etc.)"
+    required: true
+  target_description:
+    type: string
+    prompt: "Describe what files/directories to target"
+    required: true
+  additional_options:
+    type: string
+    prompt: "Any additional requirements or constraints"
+    default: "safe operation with confirmations"
+prompt: |
+  Generate a command for {operation_type} operation:
+  
+  Target: {target_description}
+  Requirements: {additional_options}
+  
+  Provide:
+  1. The exact command to run
+  2. What the command does
+  3. Any safety considerations
+  4. Alternative approaches if applicable
+context: |
+  You are a file system expert. Focus on safe, efficient file operations with proper error handling.
+post_process:
+  type: execute
+  confirm: true

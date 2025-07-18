@@ -1,0 +1,28 @@
+# plugins/docker_helper.yaml
+name: docker_helper
+description: Generate Docker configurations and troubleshoot containers
+category: containers
+parameters:
+  task_type:
+    type: string
+    prompt: "Task type (dockerfile, compose, troubleshoot, optimize)"
+    required: true
+  application_details:
+    type: string
+    prompt: "Application details or issue description"
+    required: true
+prompt: |
+  Docker task: {task_type}
+  
+  Application/Issue: {application_details}
+  
+  Provide:
+  1. Appropriate Docker configuration
+  2. Best practices implemented
+  3. Security considerations
+  4. Optimization suggestions
+context: |
+  You are a Docker expert helping with containerization tasks. Focus on security and efficiency.
+post_process:
+  type: execute
+  confirm: true

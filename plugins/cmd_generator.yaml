@@ -1,0 +1,29 @@
+# plugins/cmd_generator.yaml
+name: cmd_generator
+description: Generate single-line commands for quick tasks
+category: automation
+parameters:
+  task_description:
+    type: string
+    prompt: "Describe what you want to accomplish"
+    required: true
+  shell_type:
+    type: string
+    prompt: "Target shell (auto-detected if not specified)"
+    default: "auto"
+prompt: |
+  Generate a single-line command to: {task_description}
+  
+  Requirements:
+  - Must be a single executable command/one-liner
+  - Use {shell_type} syntax and best practices
+  - Include error handling where possible
+  - Be safe and production-ready
+  - No explanation, just the command
+  
+  Target shell: {shell_type}
+context: |
+  You are an expert system administrator. Generate efficient, safe one-liner commands.
+post_process:
+  type: execute
+  confirm: true

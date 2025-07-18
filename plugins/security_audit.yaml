@@ -1,0 +1,25 @@
+# plugins/security_audit.yaml
+name: security_audit
+description: Audit system configuration for security issues
+category: security
+parameters:
+  config_type:
+    type: string
+    prompt: "Configuration type (ssh, nginx, firewall, etc.)"
+    required: true
+  config_content:
+    type: string
+    prompt: "Enter configuration content or file path"
+    required: true
+prompt: |
+  Audit this {config_type} configuration for security issues:
+  
+  {config_content}
+  
+  Provide:
+  1. Security vulnerabilities found
+  2. Risk assessment (Critical/High/Medium/Low)
+  3. Specific remediation steps
+  4. Best practice recommendations
+context: |
+  You are a cybersecurity expert conducting a security audit. Focus on practical, actionable security improvements.

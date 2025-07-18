@@ -1,0 +1,27 @@
+# plugins/script_generator.yaml
+name: script_generator
+description: Generate shell scripts for automation tasks
+category: automation
+parameters:
+  task_description:
+    type: string
+    prompt: "Describe the automation task"
+    required: true
+  script_type:
+    type: string
+    prompt: "Script type (bash, python, powershell)"
+    default: "bash"
+prompt: |
+  Generate a {script_type} script for: {task_description}
+  
+  Requirements:
+  1. Include error handling
+  2. Add logging/output
+  3. Make it robust and production-ready
+  4. Include comments explaining each step
+  5. Add usage instructions
+context: |
+  You are a DevOps engineer creating automation scripts. Focus on reliability and maintainability.
+post_process:
+  type: execute
+  confirm: true
