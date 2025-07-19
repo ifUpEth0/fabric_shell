@@ -1,0 +1,43 @@
+# plugins/incident_responder.yaml
+name: incident_responder
+description: Guide incident response with structured procedures
+category: security
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  incident_type:
+    type: string
+    prompt: "Incident type (security breach, outage, data loss, etc.)"
+    required: true
+  incident_severity:
+    type: string
+    prompt: "Incident severity (low, medium, high, critical)"
+    required: true
+  incident_details:
+    type: string
+    prompt: "Incident details and initial observations"
+    required: true
+  affected_systems:
+    type: string
+    prompt: "Affected systems or services"
+    default: ""
+prompt: |
+  Guide incident response:
+  
+  **Type:** {incident_type}
+  **Severity:** {incident_severity}
+  **Details:** {incident_details}
+  **Affected Systems:** {affected_systems}
+  
+  Provide incident response plan:
+  1. Immediate containment and stabilization steps
+  2. Investigation and evidence collection procedures
+  3. Communication plan and stakeholder notifications
+  4. Recovery procedures and service restoration
+  5. Post-incident analysis and lessons learned
+  6. Documentation and reporting requirements
+  7. Legal and compliance considerations
+  8. Prevention strategies and security improvements
+context: |
+  You are an incident response specialist with expertise in cybersecurity,
+  crisis management, and business continuity planning.

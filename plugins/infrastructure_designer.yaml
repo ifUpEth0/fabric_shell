@@ -1,0 +1,43 @@
+# plugins/infrastructure_designer.yaml
+name: infrastructure_designer
+description: Design cloud infrastructure with best practices and cost optimization
+category: deployment
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  project_requirements:
+    type: string
+    prompt: "Project requirements and specifications"
+    required: true
+  cloud_provider:
+    type: string
+    prompt: "Cloud provider (AWS, Azure, GCP, multi-cloud)"
+    default: "AWS"
+  budget_constraints:
+    type: string
+    prompt: "Budget constraints or cost targets"
+    default: "cost-optimized"
+  scalability_needs:
+    type: string
+    prompt: "Scalability requirements (low, medium, high, auto-scaling)"
+    default: "medium"
+prompt: |
+  Design cloud infrastructure:
+  
+  **Requirements:** {project_requirements}
+  **Cloud Provider:** {cloud_provider}
+  **Budget:** {budget_constraints}
+  **Scalability:** {scalability_needs}
+  
+  Provide complete infrastructure design:
+  1. Architecture diagram and component selection
+  2. Cost analysis and optimization recommendations
+  3. Security design and compliance considerations
+  4. Scalability and performance planning
+  5. Disaster recovery and backup strategies
+  6. Monitoring and observability setup
+  7. Infrastructure as Code templates
+  8. Migration and deployment roadmap
+context: |
+  You are a cloud architect with expertise in infrastructure design,
+  cost optimization, and enterprise-scale deployments.

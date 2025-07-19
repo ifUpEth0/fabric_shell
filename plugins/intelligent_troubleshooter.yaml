@@ -1,0 +1,38 @@
+# plugins/intelligent_troubleshooter.yaml
+name: intelligent_troubleshooter
+description: Advanced system troubleshooting with root cause analysis
+category: system
+preferred_model: mixtral
+model_category: analysis
+parameters:
+  problem_description:
+    type: string
+    prompt: "Describe the problem in detail"
+    required: true
+  system_logs:
+    type: string
+    prompt: "Relevant log entries or error messages (optional)"
+    default: ""
+  system_context:
+    type: string
+    prompt: "System context (recent changes, environment, etc.)"
+    default: ""
+prompt: |
+  Perform intelligent troubleshooting for this system issue:
+  
+  **Problem:** {problem_description}
+  **Logs:** {system_logs}
+  **Context:** {system_context}
+  
+  Provide a comprehensive troubleshooting analysis:
+  1. Root cause analysis with probability estimates
+  2. Step-by-step diagnostic procedure
+  3. Specific commands to gather more information
+  4. Multiple solution approaches ranked by likelihood
+  5. Prevention strategies for future occurrences
+  6. Risk assessment for each solution
+  
+  Format your response with clear sections and actionable steps.
+context: |
+  You are an expert system administrator and DevOps engineer with deep knowledge
+  of system internals, networking, and distributed systems troubleshooting.

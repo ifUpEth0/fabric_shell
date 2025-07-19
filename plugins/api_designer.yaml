@@ -1,0 +1,46 @@
+# plugins/api_designer.yaml
+name: api_designer
+description: Design RESTful APIs with OpenAPI specifications
+category: development
+preferred_model: codellama
+model_category: code
+parameters:
+  api_purpose:
+    type: string
+    prompt: "API purpose and main functionality"
+    required: true
+  data_model:
+    type: string
+    prompt: "Data model or entities description"
+    required: true
+  authentication:
+    type: string
+    prompt: "Authentication method (JWT, OAuth2, API Key, etc.)"
+    default: "JWT"
+  api_style:
+    type: string
+    prompt: "API style (REST, GraphQL, gRPC)"
+    default: "REST"
+prompt: |
+  Design API architecture:
+  
+  **Purpose:** {api_purpose}
+  **Data Model:** {data_model}
+  **Authentication:** {authentication}
+  **Style:** {api_style}
+  
+  Provide complete API design:
+  1. OpenAPI 3.0 specification
+  2. Endpoint design with HTTP methods
+  3. Request/response schemas and validation
+  4. Authentication and authorization flows
+  5. Error handling and status codes
+  6. Rate limiting and throttling strategies
+  7. API versioning and backward compatibility
+  8. Documentation and testing guidelines
+context: |
+  You are an API architect with expertise in RESTful design,
+  OpenAPI specifications, and API best practices.
+post_process:
+  type: execute
+  confirm: true

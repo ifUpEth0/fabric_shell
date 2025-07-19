@@ -1,0 +1,43 @@
+# plugins/smart_deployment.yaml
+name: smart_deployment
+description: Intelligent deployment planning with risk analysis
+category: deployment
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  application_type:
+    type: string
+    prompt: "Application type and tech stack"
+    required: true
+  environment:
+    type: string
+    prompt: "Target environment (dev, staging, prod, multi-env)"
+    required: true
+  deployment_constraints:
+    type: string
+    prompt: "Constraints (downtime limits, compliance, etc.)"
+    default: "minimize downtime"
+  risk_tolerance:
+    type: string
+    prompt: "Risk tolerance (low, medium, high)"
+    default: "low"
+prompt: |
+  Create intelligent deployment plan:
+  
+  **Application:** {application_type}
+  **Environment:** {environment}
+  **Constraints:** {deployment_constraints}
+  **Risk Tolerance:** {risk_tolerance}
+  
+  Provide comprehensive deployment strategy:
+  1. Deployment architecture and approach
+  2. Risk assessment and mitigation strategies
+  3. Rollback procedures and criteria
+  4. Testing and validation checkpoints
+  5. Monitoring and alerting setup
+  6. Post-deployment verification steps
+  7. Compliance and audit considerations
+  8. Team coordination and communication plan
+context: |
+  You are a deployment specialist with expertise in risk management,
+  production systems, and enterprise deployment strategies.

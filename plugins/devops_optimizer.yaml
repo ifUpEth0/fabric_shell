@@ -1,0 +1,41 @@
+# plugins/devops_optimizer.yaml
+name: devops_optimizer
+description: Optimize CI/CD pipelines and DevOps workflows
+category: deployment
+preferred_model: codellama
+model_category: code
+parameters:
+  pipeline_config:
+    type: file
+    prompt: "Path to CI/CD configuration file (optional)"
+    required: false
+  workflow_description:
+    type: string
+    prompt: "Describe your current DevOps workflow"
+    required: true
+  optimization_goals:
+    type: string
+    prompt: "Optimization goals (speed, reliability, cost, security)"
+    default: "speed and reliability"
+prompt: |
+  Optimize DevOps workflow:
+  
+  **Current Workflow:** {workflow_description}
+  **Pipeline Config:** {pipeline_config}
+  **Goals:** {optimization_goals}
+  
+  Provide optimization strategy:
+  1. Workflow analysis and bottleneck identification
+  2. Pipeline optimization recommendations
+  3. Infrastructure as Code improvements
+  4. Security integration (DevSecOps)
+  5. Monitoring and observability enhancements
+  6. Cost optimization strategies
+  7. Implementation roadmap with priorities
+  8. Success metrics and KPIs
+context: |
+  You are a DevOps architect with expertise in CI/CD optimization, 
+  infrastructure automation, and cloud-native technologies.
+post_process:
+  type: execute
+  confirm: true

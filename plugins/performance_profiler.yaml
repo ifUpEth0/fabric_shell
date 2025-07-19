@@ -1,0 +1,38 @@
+# plugins/performance_profiler.yaml
+name: performance_profiler
+description: Analyze and optimize system/application performance
+category: performance
+preferred_model: mixtral
+model_category: performance
+parameters:
+  target_type:
+    type: string
+    prompt: "Target type (web app, database, system, network, etc.)"
+    required: true
+  performance_data:
+    type: string
+    prompt: "Performance metrics, logs, or profiling data"
+    required: true
+  performance_goals:
+    type: string
+    prompt: "Performance goals or SLA requirements"
+    default: "general optimization"
+prompt: |
+  Analyze performance issues for {target_type}:
+  
+  **Performance Data:**
+  {performance_data}
+  
+  **Goals:** {performance_goals}
+  
+  Provide comprehensive performance analysis:
+  1. Bottleneck identification and impact assessment
+  2. Performance metrics analysis with baseline comparisons
+  3. Optimization recommendations prioritized by impact
+  4. Implementation strategies with effort estimates
+  5. Monitoring and alerting recommendations
+  6. Capacity planning suggestions
+  7. Tools and techniques for ongoing optimization
+context: |
+  You are a performance engineering expert with deep knowledge of system 
+  optimization, profiling tools, and scalability patterns.

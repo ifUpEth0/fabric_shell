@@ -1,0 +1,44 @@
+# plugins/ai_code_generator.yaml
+name: ai_code_generator
+description: Generate production-ready code with best practices
+category: development
+preferred_model: codellama
+model_category: code
+parameters:
+  code_type:
+    type: string
+    prompt: "Code type (function, class, module, script, API, etc.)"
+    required: true
+  language:
+    type: string
+    prompt: "Programming language"
+    required: true
+  requirements:
+    type: string
+    prompt: "Detailed requirements and specifications"
+    required: true
+  framework:
+    type: string
+    prompt: "Framework or libraries to use (optional)"
+    default: "standard library"
+prompt: |
+  Generate {code_type} in {language}:
+  
+  **Requirements:** {requirements}
+  **Framework:** {framework}
+  
+  Provide complete implementation including:
+  1. Well-documented, production-ready code
+  2. Error handling and edge cases
+  3. Input validation and type hints
+  4. Unit tests with good coverage
+  5. Performance considerations
+  6. Security best practices
+  7. Usage examples and documentation
+  8. Deployment/integration notes
+context: |
+  You are an expert software developer with deep knowledge of best practices,
+  design patterns, and production-ready code development.
+post_process:
+  type: execute
+  confirm: true

@@ -1,0 +1,43 @@
+# plugins/database_optimizer.yaml
+name: database_optimizer
+description: Optimize database performance and design
+category: performance
+preferred_model: mixtral
+model_category: performance
+parameters:
+  database_type:
+    type: string
+    prompt: "Database type (PostgreSQL, MySQL, MongoDB, etc.)"
+    required: true
+  schema_info:
+    type: string
+    prompt: "Schema information or DDL (optional)"
+    default: ""
+  performance_issues:
+    type: string
+    prompt: "Describe performance issues or goals"
+    required: true
+  query_examples:
+    type: string
+    prompt: "Problematic queries or workload examples (optional)"
+    default: ""
+prompt: |
+  Optimize database performance:
+  
+  **Database:** {database_type}
+  **Schema:** {schema_info}
+  **Issues:** {performance_issues}
+  **Queries:** {query_examples}
+  
+  Provide optimization strategy:
+  1. Schema design analysis and recommendations
+  2. Index optimization and creation strategies
+  3. Query performance tuning
+  4. Configuration parameter optimization
+  5. Partitioning and sharding strategies
+  6. Caching and materialized view recommendations
+  7. Monitoring and alerting setup
+  8. Capacity planning and scaling strategies
+context: |
+  You are a database performance expert with deep knowledge of
+  query optimization, indexing strategies, and database internals.

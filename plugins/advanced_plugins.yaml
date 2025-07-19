@@ -1,0 +1,667 @@
+# plugins/advanced_code_review.yaml
+name: advanced_code_review
+description: Comprehensive code review with security and performance analysis
+category: development
+preferred_model: codellama
+model_category: code
+parameters:
+  code_file:
+    type: file
+    prompt: "Enter path to code file"
+    required: true
+  review_focus:
+    type: string
+    prompt: "Review focus (security, performance, style, all)"
+    default: "all"
+  language:
+    type: string
+    prompt: "Programming language (auto-detect if blank)"
+    default: "auto-detect"
+prompt: |
+  Perform a comprehensive {review_focus} code review of this {language} code:
+  
+  {code_file}
+  
+  Provide detailed analysis including:
+  1. Code quality assessment (0-10 score)
+  2. Security vulnerabilities (with severity levels)
+  3. Performance bottlenecks and optimizations
+  4. Best practice violations
+  5. Refactoring suggestions with code examples
+  6. Documentation improvements needed
+  7. Testing recommendations
+  
+  Focus area: {review_focus}
+context: |
+  You are a senior software engineer with expertise in secure coding practices, 
+  performance optimization, and code quality standards. Provide actionable,
+  specific recommendations with code examples where applicable.
+
+---
+
+# plugins/intelligent_troubleshooter.yaml
+name: intelligent_troubleshooter
+description: Advanced system troubleshooting with root cause analysis
+category: system
+preferred_model: mixtral
+model_category: analysis
+parameters:
+  problem_description:
+    type: string
+    prompt: "Describe the problem in detail"
+    required: true
+  system_logs:
+    type: string
+    prompt: "Relevant log entries or error messages (optional)"
+    default: ""
+  system_context:
+    type: string
+    prompt: "System context (recent changes, environment, etc.)"
+    default: ""
+prompt: |
+  Perform intelligent troubleshooting for this system issue:
+  
+  **Problem:** {problem_description}
+  **Logs:** {system_logs}
+  **Context:** {system_context}
+  
+  Provide a comprehensive troubleshooting analysis:
+  1. Root cause analysis with probability estimates
+  2. Step-by-step diagnostic procedure
+  3. Specific commands to gather more information
+  4. Multiple solution approaches ranked by likelihood
+  5. Prevention strategies for future occurrences
+  6. Risk assessment for each solution
+  
+  Format your response with clear sections and actionable steps.
+context: |
+  You are an expert system administrator and DevOps engineer with deep knowledge
+  of system internals, networking, and distributed systems troubleshooting.
+
+---
+
+# plugins/performance_profiler.yaml
+name: performance_profiler
+description: Analyze and optimize system/application performance
+category: performance
+preferred_model: mixtral
+model_category: performance
+parameters:
+  target_type:
+    type: string
+    prompt: "Target type (web app, database, system, network, etc.)"
+    required: true
+  performance_data:
+    type: string
+    prompt: "Performance metrics, logs, or profiling data"
+    required: true
+  performance_goals:
+    type: string
+    prompt: "Performance goals or SLA requirements"
+    default: "general optimization"
+prompt: |
+  Analyze performance issues for {target_type}:
+  
+  **Performance Data:**
+  {performance_data}
+  
+  **Goals:** {performance_goals}
+  
+  Provide comprehensive performance analysis:
+  1. Bottleneck identification and impact assessment
+  2. Performance metrics analysis with baseline comparisons
+  3. Optimization recommendations prioritized by impact
+  4. Implementation strategies with effort estimates
+  5. Monitoring and alerting recommendations
+  6. Capacity planning suggestions
+  7. Tools and techniques for ongoing optimization
+context: |
+  You are a performance engineering expert with deep knowledge of system 
+  optimization, profiling tools, and scalability patterns.
+
+---
+
+# plugins/security_scanner.yaml
+name: security_scanner
+description: Comprehensive security analysis and hardening recommendations
+category: security
+preferred_model: llama3.2
+model_category: security
+parameters:
+  scan_target:
+    type: string
+    prompt: "Target to scan (config file, system setup, application, etc.)"
+    required: true
+  scan_type:
+    type: string
+    prompt: "Scan type (configuration, vulnerability, compliance, all)"
+    default: "all"
+  compliance_framework:
+    type: string
+    prompt: "Compliance framework (CIS, NIST, SOC2, PCI-DSS, etc.)"
+    default: "CIS"
+prompt: |
+  Perform security analysis on: {scan_target}
+  
+  **Scan Type:** {scan_type}
+  **Compliance Framework:** {compliance_framework}
+  
+  Provide detailed security assessment:
+  1. Vulnerability assessment with CVSS scores
+  2. Configuration security analysis
+  3. Compliance gap analysis against {compliance_framework}
+  4. Risk prioritization matrix
+  5. Specific remediation steps with commands
+  6. Security hardening recommendations
+  7. Monitoring and detection strategies
+  8. Incident response considerations
+context: |
+  You are a cybersecurity expert specializing in system hardening, 
+  vulnerability assessment, and compliance frameworks.
+
+---
+
+# plugins/devops_optimizer.yaml
+name: devops_optimizer
+description: Optimize CI/CD pipelines and DevOps workflows
+category: deployment
+preferred_model: codellama
+model_category: code
+parameters:
+  pipeline_config:
+    type: file
+    prompt: "Path to CI/CD configuration file (optional)"
+    required: false
+  workflow_description:
+    type: string
+    prompt: "Describe your current DevOps workflow"
+    required: true
+  optimization_goals:
+    type: string
+    prompt: "Optimization goals (speed, reliability, cost, security)"
+    default: "speed and reliability"
+prompt: |
+  Optimize DevOps workflow:
+  
+  **Current Workflow:** {workflow_description}
+  **Pipeline Config:** {pipeline_config}
+  **Goals:** {optimization_goals}
+  
+  Provide optimization strategy:
+  1. Workflow analysis and bottleneck identification
+  2. Pipeline optimization recommendations
+  3. Infrastructure as Code improvements
+  4. Security integration (DevSecOps)
+  5. Monitoring and observability enhancements
+  6. Cost optimization strategies
+  7. Implementation roadmap with priorities
+  8. Success metrics and KPIs
+context: |
+  You are a DevOps architect with expertise in CI/CD optimization, 
+  infrastructure automation, and cloud-native technologies.
+post_process:
+  type: execute
+  confirm: true
+
+---
+
+# plugins/ai_code_generator.yaml
+name: ai_code_generator
+description: Generate production-ready code with best practices
+category: development
+preferred_model: codellama
+model_category: code
+parameters:
+  code_type:
+    type: string
+    prompt: "Code type (function, class, module, script, API, etc.)"
+    required: true
+  language:
+    type: string
+    prompt: "Programming language"
+    required: true
+  requirements:
+    type: string
+    prompt: "Detailed requirements and specifications"
+    required: true
+  framework:
+    type: string
+    prompt: "Framework or libraries to use (optional)"
+    default: "standard library"
+prompt: |
+  Generate {code_type} in {language}:
+  
+  **Requirements:** {requirements}
+  **Framework:** {framework}
+  
+  Provide complete implementation including:
+  1. Well-documented, production-ready code
+  2. Error handling and edge cases
+  3. Input validation and type hints
+  4. Unit tests with good coverage
+  5. Performance considerations
+  6. Security best practices
+  7. Usage examples and documentation
+  8. Deployment/integration notes
+context: |
+  You are an expert software developer with deep knowledge of best practices,
+  design patterns, and production-ready code development.
+post_process:
+  type: execute
+  confirm: true
+
+---
+
+# plugins/smart_deployment.yaml
+name: smart_deployment
+description: Intelligent deployment planning with risk analysis
+category: deployment
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  application_type:
+    type: string
+    prompt: "Application type and tech stack"
+    required: true
+  environment:
+    type: string
+    prompt: "Target environment (dev, staging, prod, multi-env)"
+    required: true
+  deployment_constraints:
+    type: string
+    prompt: "Constraints (downtime limits, compliance, etc.)"
+    default: "minimize downtime"
+  risk_tolerance:
+    type: string
+    prompt: "Risk tolerance (low, medium, high)"
+    default: "low"
+prompt: |
+  Create intelligent deployment plan:
+  
+  **Application:** {application_type}
+  **Environment:** {environment}
+  **Constraints:** {deployment_constraints}
+  **Risk Tolerance:** {risk_tolerance}
+  
+  Provide comprehensive deployment strategy:
+  1. Deployment architecture and approach
+  2. Risk assessment and mitigation strategies
+  3. Rollback procedures and criteria
+  4. Testing and validation checkpoints
+  5. Monitoring and alerting setup
+  6. Post-deployment verification steps
+  7. Compliance and audit considerations
+  8. Team coordination and communication plan
+context: |
+  You are a deployment specialist with expertise in risk management,
+  production systems, and enterprise deployment strategies.
+
+---
+
+# plugins/log_intelligence.yaml
+name: log_intelligence
+description: Intelligent log analysis with pattern recognition and alerting
+category: system
+preferred_model: mixtral
+model_category: analysis
+parameters:
+  log_file:
+    type: file
+    prompt: "Path to log file"
+    required: true
+  analysis_timeframe:
+    type: string
+    prompt: "Analysis timeframe (last hour, day, week, all)"
+    default: "all"
+  alert_threshold:
+    type: string
+    prompt: "Alert threshold (low, medium, high, critical)"
+    default: "medium"
+prompt: |
+  Perform intelligent log analysis:
+  
+  **Log Content:** {log_file}
+  **Timeframe:** {analysis_timeframe}
+  **Alert Threshold:** {alert_threshold}
+  
+  Provide comprehensive log intelligence:
+  1. Pattern recognition and anomaly detection
+  2. Error categorization with severity levels
+  3. Trend analysis and statistical insights
+  4. Root cause correlation across log entries
+  5. Predictive analysis for potential issues
+  6. Automated alerting recommendations
+  7. Log optimization and retention strategies
+  8. Investigation playbooks for common patterns
+context: |
+  You are a log analysis expert with deep knowledge of system behavior,
+  pattern recognition, and operational intelligence.
+
+---
+
+# plugins/infrastructure_designer.yaml
+name: infrastructure_designer
+description: Design cloud infrastructure with best practices and cost optimization
+category: deployment
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  project_requirements:
+    type: string
+    prompt: "Project requirements and specifications"
+    required: true
+  cloud_provider:
+    type: string
+    prompt: "Cloud provider (AWS, Azure, GCP, multi-cloud)"
+    default: "AWS"
+  budget_constraints:
+    type: string
+    prompt: "Budget constraints or cost targets"
+    default: "cost-optimized"
+  scalability_needs:
+    type: string
+    prompt: "Scalability requirements (low, medium, high, auto-scaling)"
+    default: "medium"
+prompt: |
+  Design cloud infrastructure:
+  
+  **Requirements:** {project_requirements}
+  **Cloud Provider:** {cloud_provider}
+  **Budget:** {budget_constraints}
+  **Scalability:** {scalability_needs}
+  
+  Provide complete infrastructure design:
+  1. Architecture diagram and component selection
+  2. Cost analysis and optimization recommendations
+  3. Security design and compliance considerations
+  4. Scalability and performance planning
+  5. Disaster recovery and backup strategies
+  6. Monitoring and observability setup
+  7. Infrastructure as Code templates
+  8. Migration and deployment roadmap
+context: |
+  You are a cloud architect with expertise in infrastructure design,
+  cost optimization, and enterprise-scale deployments.
+
+---
+
+# plugins/api_designer.yaml
+name: api_designer
+description: Design RESTful APIs with OpenAPI specifications
+category: development
+preferred_model: codellama
+model_category: code
+parameters:
+  api_purpose:
+    type: string
+    prompt: "API purpose and main functionality"
+    required: true
+  data_model:
+    type: string
+    prompt: "Data model or entities description"
+    required: true
+  authentication:
+    type: string
+    prompt: "Authentication method (JWT, OAuth2, API Key, etc.)"
+    default: "JWT"
+  api_style:
+    type: string
+    prompt: "API style (REST, GraphQL, gRPC)"
+    default: "REST"
+prompt: |
+  Design API architecture:
+  
+  **Purpose:** {api_purpose}
+  **Data Model:** {data_model}
+  **Authentication:** {authentication}
+  **Style:** {api_style}
+  
+  Provide complete API design:
+  1. OpenAPI 3.0 specification
+  2. Endpoint design with HTTP methods
+  3. Request/response schemas and validation
+  4. Authentication and authorization flows
+  5. Error handling and status codes
+  6. Rate limiting and throttling strategies
+  7. API versioning and backward compatibility
+  8. Documentation and testing guidelines
+context: |
+  You are an API architect with expertise in RESTful design,
+  OpenAPI specifications, and API best practices.
+post_process:
+  type: execute
+  confirm: true
+
+---
+
+# plugins/database_optimizer.yaml
+name: database_optimizer
+description: Optimize database performance and design
+category: performance
+preferred_model: mixtral
+model_category: performance
+parameters:
+  database_type:
+    type: string
+    prompt: "Database type (PostgreSQL, MySQL, MongoDB, etc.)"
+    required: true
+  schema_info:
+    type: string
+    prompt: "Schema information or DDL (optional)"
+    default: ""
+  performance_issues:
+    type: string
+    prompt: "Describe performance issues or goals"
+    required: true
+  query_examples:
+    type: string
+    prompt: "Problematic queries or workload examples (optional)"
+    default: ""
+prompt: |
+  Optimize database performance:
+  
+  **Database:** {database_type}
+  **Schema:** {schema_info}
+  **Issues:** {performance_issues}
+  **Queries:** {query_examples}
+  
+  Provide optimization strategy:
+  1. Schema design analysis and recommendations
+  2. Index optimization and creation strategies
+  3. Query performance tuning
+  4. Configuration parameter optimization
+  5. Partitioning and sharding strategies
+  6. Caching and materialized view recommendations
+  7. Monitoring and alerting setup
+  8. Capacity planning and scaling strategies
+context: |
+  You are a database performance expert with deep knowledge of
+  query optimization, indexing strategies, and database internals.
+
+---
+
+# plugins/container_orchestrator.yaml
+name: container_orchestrator
+description: Design Kubernetes deployments and container strategies
+category: containers
+preferred_model: codellama
+model_category: code
+parameters:
+  application_type:
+    type: string
+    prompt: "Application type and architecture"
+    required: true
+  deployment_scale:
+    type: string
+    prompt: "Deployment scale (small, medium, large, enterprise)"
+    default: "medium"
+  environment_type:
+    type: string
+    prompt: "Environment (development, staging, production)"
+    default: "production"
+  special_requirements:
+    type: string
+    prompt: "Special requirements (GPU, storage, networking, etc.)"
+    default: "standard"
+prompt: |
+  Design Kubernetes deployment:
+  
+  **Application:** {application_type}
+  **Scale:** {deployment_scale}
+  **Environment:** {environment_type}
+  **Requirements:** {special_requirements}
+  
+  Provide complete Kubernetes strategy:
+  1. Deployment manifests (YAML)
+  2. Service and ingress configuration
+  3. ConfigMap and Secret management
+  4. Resource limits and requests optimization
+  5. Health checks and readiness probes
+  6. Horizontal Pod Autoscaling setup
+  7. Persistent storage configuration
+  8. Security policies and RBAC
+  9. Monitoring and logging integration
+context: |
+  You are a Kubernetes expert with deep knowledge of container orchestration,
+  cloud-native patterns, and production deployment strategies.
+post_process:
+  type: execute
+  confirm: true
+
+---
+
+# plugins/network_analyzer.yaml
+name: network_analyzer
+description: Analyze and troubleshoot network performance and security
+category: system
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  network_issue:
+    type: string
+    prompt: "Network issue description"
+    required: true
+  network_topology:
+    type: string
+    prompt: "Network topology or configuration details"
+    default: ""
+  diagnostic_data:
+    type: string
+    prompt: "Diagnostic data (traceroute, netstat, tcpdump, etc.)"
+    default: ""
+  performance_requirements:
+    type: string
+    prompt: "Performance requirements or SLAs"
+    default: "standard performance"
+prompt: |
+  Analyze network issue:
+  
+  **Issue:** {network_issue}
+  **Topology:** {network_topology}
+  **Diagnostic Data:** {diagnostic_data}
+  **Requirements:** {performance_requirements}
+  
+  Provide network analysis:
+  1. Problem diagnosis and root cause analysis
+  2. Network performance assessment
+  3. Security vulnerability identification
+  4. Configuration optimization recommendations
+  5. Monitoring and alerting strategies
+  6. Capacity planning and scaling options
+  7. Troubleshooting procedures and tools
+  8. Prevention and maintenance strategies
+context: |
+  You are a network engineer with expertise in performance optimization,
+  security analysis, and enterprise networking solutions.
+
+---
+
+# plugins/compliance_auditor.yaml
+name: compliance_auditor
+description: Audit systems for compliance with industry standards
+category: security
+preferred_model: mixtral
+model_category: analysis
+parameters:
+  compliance_framework:
+    type: string
+    prompt: "Compliance framework (SOC2, HIPAA, PCI-DSS, GDPR, ISO27001)"
+    required: true
+  system_description:
+    type: string
+    prompt: "System or infrastructure description"
+    required: true
+  audit_scope:
+    type: string
+    prompt: "Audit scope (full, specific controls, gap analysis)"
+    default: "gap analysis"
+  current_controls:
+    type: string
+    prompt: "Current security controls and policies"
+    default: ""
+prompt: |
+  Perform compliance audit:
+  
+  **Framework:** {compliance_framework}
+  **System:** {system_description}
+  **Scope:** {audit_scope}
+  **Current Controls:** {current_controls}
+  
+  Provide compliance assessment:
+  1. Control framework mapping and gap analysis
+  2. Risk assessment with impact ratings
+  3. Compliance status by control domain
+  4. Remediation roadmap with priorities
+  5. Policy and procedure recommendations
+  6. Technical control implementation guides
+  7. Audit evidence collection strategies
+  8. Ongoing compliance monitoring plan
+context: |
+  You are a compliance expert with deep knowledge of regulatory frameworks,
+  risk management, and enterprise security governance.
+
+---
+
+# plugins/incident_responder.yaml
+name: incident_responder
+description: Guide incident response with structured procedures
+category: security
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  incident_type:
+    type: string
+    prompt: "Incident type (security breach, outage, data loss, etc.)"
+    required: true
+  incident_severity:
+    type: string
+    prompt: "Incident severity (low, medium, high, critical)"
+    required: true
+  incident_details:
+    type: string
+    prompt: "Incident details and initial observations"
+    required: true
+  affected_systems:
+    type: string
+    prompt: "Affected systems or services"
+    default: ""
+prompt: |
+  Guide incident response:
+  
+  **Type:** {incident_type}
+  **Severity:** {incident_severity}
+  **Details:** {incident_details}
+  **Affected Systems:** {affected_systems}
+  
+  Provide incident response plan:
+  1. Immediate containment and stabilization steps
+  2. Investigation and evidence collection procedures
+  3. Communication plan and stakeholder notifications
+  4. Recovery procedures and service restoration
+  5. Post-incident analysis and lessons learned
+  6. Documentation and reporting requirements
+  7. Legal and compliance considerations
+  8. Prevention strategies and security improvements
+context: |
+  You are an incident response specialist with expertise in cybersecurity,
+  crisis management, and business continuity planning.

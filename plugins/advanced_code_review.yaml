@@ -1,0 +1,38 @@
+# plugins/advanced_code_review.yaml
+name: advanced_code_review
+description: Comprehensive code review with security and performance analysis
+category: development
+preferred_model: codellama
+model_category: code
+parameters:
+  code_file:
+    type: file
+    prompt: "Enter path to code file"
+    required: true
+  review_focus:
+    type: string
+    prompt: "Review focus (security, performance, style, all)"
+    default: "all"
+  language:
+    type: string
+    prompt: "Programming language (auto-detect if blank)"
+    default: "auto-detect"
+prompt: |
+  Perform a comprehensive {review_focus} code review of this {language} code:
+  
+  {code_file}
+  
+  Provide detailed analysis including:
+  1. Code quality assessment (0-10 score)
+  2. Security vulnerabilities (with severity levels)
+  3. Performance bottlenecks and optimizations
+  4. Best practice violations
+  5. Refactoring suggestions with code examples
+  6. Documentation improvements needed
+  7. Testing recommendations
+  
+  Focus area: {review_focus}
+context: |
+  You are a senior software engineer with expertise in secure coding practices, 
+  performance optimization, and code quality standards. Provide actionable,
+  specific recommendations with code examples where applicable.

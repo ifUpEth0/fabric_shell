@@ -1,0 +1,38 @@
+# plugins/log_intelligence.yaml
+name: log_intelligence
+description: Intelligent log analysis with pattern recognition and alerting
+category: system
+preferred_model: mixtral
+model_category: analysis
+parameters:
+  log_file:
+    type: file
+    prompt: "Path to log file"
+    required: true
+  analysis_timeframe:
+    type: string
+    prompt: "Analysis timeframe (last hour, day, week, all)"
+    default: "all"
+  alert_threshold:
+    type: string
+    prompt: "Alert threshold (low, medium, high, critical)"
+    default: "medium"
+prompt: |
+  Perform intelligent log analysis:
+  
+  **Log Content:** {log_file}
+  **Timeframe:** {analysis_timeframe}
+  **Alert Threshold:** {alert_threshold}
+  
+  Provide comprehensive log intelligence:
+  1. Pattern recognition and anomaly detection
+  2. Error categorization with severity levels
+  3. Trend analysis and statistical insights
+  4. Root cause correlation across log entries
+  5. Predictive analysis for potential issues
+  6. Automated alerting recommendations
+  7. Log optimization and retention strategies
+  8. Investigation playbooks for common patterns
+context: |
+  You are a log analysis expert with deep knowledge of system behavior,
+  pattern recognition, and operational intelligence.

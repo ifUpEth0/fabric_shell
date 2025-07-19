@@ -1,0 +1,43 @@
+# plugins/network_analyzer.yaml
+name: network_analyzer
+description: Analyze and troubleshoot network performance and security
+category: system
+preferred_model: llama3.2
+model_category: analysis
+parameters:
+  network_issue:
+    type: string
+    prompt: "Network issue description"
+    required: true
+  network_topology:
+    type: string
+    prompt: "Network topology or configuration details"
+    default: ""
+  diagnostic_data:
+    type: string
+    prompt: "Diagnostic data (traceroute, netstat, tcpdump, etc.)"
+    default: ""
+  performance_requirements:
+    type: string
+    prompt: "Performance requirements or SLAs"
+    default: "standard performance"
+prompt: |
+  Analyze network issue:
+  
+  **Issue:** {network_issue}
+  **Topology:** {network_topology}
+  **Diagnostic Data:** {diagnostic_data}
+  **Requirements:** {performance_requirements}
+  
+  Provide network analysis:
+  1. Problem diagnosis and root cause analysis
+  2. Network performance assessment
+  3. Security vulnerability identification
+  4. Configuration optimization recommendations
+  5. Monitoring and alerting strategies
+  6. Capacity planning and scaling options
+  7. Troubleshooting procedures and tools
+  8. Prevention and maintenance strategies
+context: |
+  You are a network engineer with expertise in performance optimization,
+  security analysis, and enterprise networking solutions.

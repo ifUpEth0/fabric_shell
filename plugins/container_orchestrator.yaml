@@ -1,0 +1,47 @@
+# plugins/container_orchestrator.yaml
+name: container_orchestrator
+description: Design Kubernetes deployments and container strategies
+category: containers
+preferred_model: codellama
+model_category: code
+parameters:
+  application_type:
+    type: string
+    prompt: "Application type and architecture"
+    required: true
+  deployment_scale:
+    type: string
+    prompt: "Deployment scale (small, medium, large, enterprise)"
+    default: "medium"
+  environment_type:
+    type: string
+    prompt: "Environment (development, staging, production)"
+    default: "production"
+  special_requirements:
+    type: string
+    prompt: "Special requirements (GPU, storage, networking, etc.)"
+    default: "standard"
+prompt: |
+  Design Kubernetes deployment:
+  
+  **Application:** {application_type}
+  **Scale:** {deployment_scale}
+  **Environment:** {environment_type}
+  **Requirements:** {special_requirements}
+  
+  Provide complete Kubernetes strategy:
+  1. Deployment manifests (YAML)
+  2. Service and ingress configuration
+  3. ConfigMap and Secret management
+  4. Resource limits and requests optimization
+  5. Health checks and readiness probes
+  6. Horizontal Pod Autoscaling setup
+  7. Persistent storage configuration
+  8. Security policies and RBAC
+  9. Monitoring and logging integration
+context: |
+  You are a Kubernetes expert with deep knowledge of container orchestration,
+  cloud-native patterns, and production deployment strategies.
+post_process:
+  type: execute
+  confirm: true

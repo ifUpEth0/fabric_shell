@@ -1,0 +1,37 @@
+# plugins/security_scanner.yaml
+name: security_scanner
+description: Comprehensive security analysis and hardening recommendations
+category: security
+preferred_model: llama3.2
+model_category: security
+parameters:
+  scan_target:
+    type: string
+    prompt: "Target to scan (config file, system setup, application, etc.)"
+    required: true
+  scan_type:
+    type: string
+    prompt: "Scan type (configuration, vulnerability, compliance, all)"
+    default: "all"
+  compliance_framework:
+    type: string
+    prompt: "Compliance framework (CIS, NIST, SOC2, PCI-DSS, etc.)"
+    default: "CIS"
+prompt: |
+  Perform security analysis on: {scan_target}
+  
+  **Scan Type:** {scan_type}
+  **Compliance Framework:** {compliance_framework}
+  
+  Provide detailed security assessment:
+  1. Vulnerability assessment with CVSS scores
+  2. Configuration security analysis
+  3. Compliance gap analysis against {compliance_framework}
+  4. Risk prioritization matrix
+  5. Specific remediation steps with commands
+  6. Security hardening recommendations
+  7. Monitoring and detection strategies
+  8. Incident response considerations
+context: |
+  You are a cybersecurity expert specializing in system hardening, 
+  vulnerability assessment, and compliance frameworks.

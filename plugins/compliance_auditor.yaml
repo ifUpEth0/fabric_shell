@@ -1,0 +1,43 @@
+# plugins/compliance_auditor.yaml
+name: compliance_auditor
+description: Audit systems for compliance with industry standards
+category: security
+preferred_model: mixtral
+model_category: analysis
+parameters:
+  compliance_framework:
+    type: string
+    prompt: "Compliance framework (SOC2, HIPAA, PCI-DSS, GDPR, ISO27001)"
+    required: true
+  system_description:
+    type: string
+    prompt: "System or infrastructure description"
+    required: true
+  audit_scope:
+    type: string
+    prompt: "Audit scope (full, specific controls, gap analysis)"
+    default: "gap analysis"
+  current_controls:
+    type: string
+    prompt: "Current security controls and policies"
+    default: ""
+prompt: |
+  Perform compliance audit:
+  
+  **Framework:** {compliance_framework}
+  **System:** {system_description}
+  **Scope:** {audit_scope}
+  **Current Controls:** {current_controls}
+  
+  Provide compliance assessment:
+  1. Control framework mapping and gap analysis
+  2. Risk assessment with impact ratings
+  3. Compliance status by control domain
+  4. Remediation roadmap with priorities
+  5. Policy and procedure recommendations
+  6. Technical control implementation guides
+  7. Audit evidence collection strategies
+  8. Ongoing compliance monitoring plan
+context: |
+  You are a compliance expert with deep knowledge of regulatory frameworks,
+  risk management, and enterprise security governance.
