@@ -1,5 +1,5 @@
 """
-Main AI Fabric Shell application class
+Updated main AI Fabric Shell application class with enhanced command handling
 """
 
 import os
@@ -24,7 +24,7 @@ from ..utils.extractors import TextExtractor
 console = Console()
 
 class AIFabricShell:
-    """Main application class with enhanced Markdown rendering"""
+    """Main application class with enhanced Markdown rendering and command history"""
     
     def __init__(self, model: str = "llama3.1"):
         """
@@ -48,7 +48,7 @@ class AIFabricShell:
         self.plugin_manager = PluginManager(str(plugins_dir))
         
         self.renderer = ResponseRenderer()
-        self.command_executor = CommandExecutor()
+        self.command_executor = CommandExecutor()  # Now enhanced by default
         self.text_extractor = TextExtractor()
         
         self.platform = platform.system().lower()
@@ -148,7 +148,7 @@ class AIFabricShell:
             return f"AI communication error: {e}"
     
     def generate_oneliner(self, task: str, suggested_model: str = None):
-        """Generate and execute one-liner command"""
+        """Generate and execute one-liner command with enhanced options"""
         # Get model recommendations
         recommendations = self.model_manager.get_model_recommendations('quick')
         
@@ -172,13 +172,19 @@ class AIFabricShell:
         }
         
         context = shell_contexts.get(self.current_shell, "shell commands")
+        
+        # Get historical context for similar commands
+        historical_context = self.command_executor.get_command_context(task)
+        
         prompt = f"""Generate a single-line {context} command to: {task}
 
 Requirements:
 - Single line only
 - Use {self.current_shell} syntax
 - Production-ready and safe
-- Respond with ONLY the command (no explanation/markdown)"""
+- Respond with ONLY the command (no explanation/markdown)
+
+{historical_context}"""
         
         console.print(Panel(f"Generating {self.current_shell.upper()} command for: {task}",
                           title="[cyan]Command Generator[/cyan]", border_style="cyan"))
@@ -189,13 +195,51 @@ Requirements:
         command = self.text_extractor.extract_clean_command(response)
         
         if command:
-            self.renderer.render_code_block(command, self.current_shell, f"Generated {self.current_shell.upper()} Command")
+            # Use enhanced executor with y/n/e options
+            result = self.command_executor.execute_command_with_options(
+                command, task, self.current_shell, self._chat_with_ai
+            )
             
-            if Confirm.ask(f"Execute: [cyan]{command[:100]}{'...' if len(command) > 100 else ''}[/cyan]?"):
-                result = self.command_executor.execute_command(command, self.current_shell)
-                error = self.command_executor.show_result(result)
-                
-                if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
+            # Check if user confirmed the command didn't work as expected
+            if result.get('user_confirmed_failure'):
+                if Confirm.ask("[yellow]Would you like AI to generate an alternative approach?[/yellow]"):
+                    alternative_prompt = f"""The previous command didn't accomplish the user's goal. Generate an alternative approach.
+
+## Original Task
+{task}
+
+## Previous Command (didn't work as expected)
+```{self.current_shell}
+{command}
+```
+
+## Previous Output
+```
+{result.get('stdout', 'No output')}
+```
+
+Please provide a different approach or command to accomplish: {task}
+
+Requirements:
+- Use a completely different method if possible
+- Single line command only
+- Use {self.current_shell} syntax
+- Respond with ONLY the command (no explanation/markdown)"""
+                    
+                    with console.status("[yellow]AI generating alternative...", spinner="dots"):
+                        alternative_response = self._chat_with_ai(alternative_prompt).strip()
+                    
+                    alternative_command = self.text_extractor.extract_clean_command(alternative_response)
+                    if alternative_command:
+                        console.print(f"\n[cyan]Alternative approach:[/cyan]")
+                        result = self.command_executor.execute_command_with_options(
+                            alternative_command, f"Alternative: {task}", self.current_shell, self._chat_with_ai
+                        )
+            
+            # Only offer troubleshooting for actual technical errors
+            elif result.get('error') or (result.get('stderr') and not result.get('success')):
+                error = result.get('stderr') or result.get('error')
+                if Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
                     self._troubleshoot_error(command, error, task)
         else:
             console.print("[red]Could not extract valid command from AI response[/red]")
@@ -239,9 +283,10 @@ Format your response with clear sections and use code blocks for commands."""
         corrected = self.text_extractor.extract_clean_command(response)
         
         if corrected and Confirm.ask("[green]Try corrected command?[/green]"):
-            if Confirm.ask(f"Execute: [cyan]{corrected}[/cyan]?"):
-                result = self.command_executor.execute_command(corrected, self.current_shell)
-                self.command_executor.show_result(result, "Corrected command successful!")
+            result = self.command_executor.execute_command_with_options(
+                corrected, f"Fixed: {task}", self.current_shell, self._chat_with_ai
+            )
+            self.command_executor.show_result(result, "Corrected command executed successfully!")
     
     def run_plugin(self, plugin_name: str):
         """Execute a plugin with optimal model selection"""
@@ -295,7 +340,7 @@ Format your response with clear sections and use code blocks for commands."""
         
         # Handle post-processing
         if plugin.get('post_process', {}).get('type') == 'execute':
-            self._extract_and_execute(ai_response, plugin_name)
+            self._extract_and_execute(ai_response, plugin_name, values)
     
     def _get_optimal_model_for_plugin(self, plugin_name: str, plugin: Dict[str, Any]) -> str:
         """Determine the optimal model for a plugin"""
@@ -331,8 +376,8 @@ Format your response with clear sections and use code blocks for commands."""
         # 4. Fallback to current model
         return self.model_manager.current_model
     
-    def _extract_and_execute(self, response: str, plugin_name: str):
-        """Extract and execute code from AI response"""
+    def _extract_and_execute(self, response: str, plugin_name: str, plugin_values: Dict[str, Any] = None):
+        """Extract and execute code from AI response with enhanced options"""
         # Find code blocks
         code_blocks = self.text_extractor.extract_code_blocks(response)
         
@@ -349,13 +394,29 @@ Format your response with clear sections and use code blocks for commands."""
             language = self.current_shell
         
         if code:
-            self.renderer.render_code_block(code, language, f"Extracted {language.title()} Code")
+            # Create task description from plugin name and values
+            task_description = f"Plugin: {plugin_name}"
+            if plugin_values:
+                task_details = ", ".join([f"{k}={v[:50]}..." if len(str(v)) > 50 else f"{k}={v}" 
+                                        for k, v in plugin_values.items()])
+                task_description += f" ({task_details})"
             
-            if Confirm.ask(f"Execute: [cyan]{code[:100]}{'...' if len(code) > 100 else ''}[/cyan]?"):
-                result = self.command_executor.execute_command(code, language)
-                error = self.command_executor.show_result(result)
-                
-                if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
+            # Use enhanced executor with y/n/e options
+            result = self.command_executor.execute_command_with_options(
+                code, task_description, language, self._chat_with_ai
+            )
+            
+            # Check if user confirmed the command didn't work as expected
+            if result.get('user_confirmed_failure'):
+                if Confirm.ask("[yellow]Would you like AI to generate an alternative approach?[/yellow]"):
+                    # Get the plugin again to regenerate with different approach
+                    console.print("[yellow]Regenerating with alternative approach...[/yellow]")
+                    # Could potentially re-run the plugin with additional context
+            
+            # Only offer troubleshooting for actual technical errors
+            elif result.get('error') or (result.get('stderr') and not result.get('success')):
+                error = result.get('stderr') or result.get('error')
+                if Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
                     self._troubleshoot_script_error(code, error, language)
         else:
             console.print("[yellow]No executable code found in response[/yellow]")
@@ -490,12 +551,10 @@ Format your response with clear sections and code blocks for any commands."""
         # Try to extract a corrected command
         corrected = self.text_extractor.extract_clean_command(response)
         if corrected and corrected != command:
-            self.renderer.render_code_block(corrected, self.current_shell, "Suggested Fix")
-            
-            if Confirm.ask("[green]Try the suggested fix?[/green]"):
-                if Confirm.ask(f"Execute: [cyan]{corrected}[/cyan]?"):
-                    result = self.command_executor.execute_command(corrected, self.current_shell)
-                    self.command_executor.show_result(result, "Fixed command executed successfully!")
+            result = self.command_executor.execute_command_with_options(
+                corrected, f"Fix for: {command}", self.current_shell, self._chat_with_ai
+            )
+            self.command_executor.show_result(result, "Fixed command executed successfully!")
     
     def show_plugins(self, category: str = None):
         """Display available plugins, optionally filtered by category"""
@@ -645,6 +704,35 @@ Focus on practical, {self.system_info.os_name}-specific optimizations."""
         console.print(f"\n[dim]Available tools: {', '.join(available_tools)}[/dim]")
         console.print(f"[dim]Available models: {len(self.model_manager.available_models)} | Current: {self.model_manager.current_model}[/dim]")
     
+    def show_command_history(self):
+        """Show command execution history"""
+        history = self.command_executor.history_manager.history
+        
+        if not history:
+            console.print("[yellow]No command history found[/yellow]")
+            return
+        
+        from rich.table import Table
+        table = Table(title="Command History (Last 10)")
+        table.add_column("Date", style="cyan")
+        table.add_column("Task", style="green", max_width=30)
+        table.add_column("Command", style="yellow", max_width=40)
+        table.add_column("Shell", style="magenta")
+        table.add_column("Status", justify="center")
+        
+        # Show last 10 entries
+        for entry in history[-10:]:
+            timestamp = entry['timestamp'][:19].replace('T', ' ')  # Format datetime
+            task = entry['task_description'][:27] + "..." if len(entry['task_description']) > 30 else entry['task_description']
+            command = entry['command'][:37] + "..." if len(entry['command']) > 40 else entry['command']
+            shell = entry['shell_type']
+            status = "✅" if entry.get('success', False) else "❌"
+            
+            table.add_row(timestamp, task, command, shell, status)
+        
+        console.print(table)
+        console.print(f"\n[dim]Total commands in history: {len(history)}[/dim]")
+    
     def _chat_mode(self):
         """Interactive chat mode with model selection and enhanced rendering"""
         current_chat_model = self.model_manager.current_model
@@ -684,11 +772,11 @@ Focus on practical, {self.system_info.os_name}-specific optimizations."""
         """Display comprehensive help information with enhanced formatting"""
         help_content = f"""# AI Fabric Shell - Enhanced Edition
 
-Welcome to the AI Fabric Shell with **Markdown rendering support**! All AI responses now display with proper formatting including headers, code blocks, lists, and more.
+Welcome to the AI Fabric Shell with **enhanced command handling**! All AI responses now display with proper formatting, and you can explain commands before executing them.
 
 ## Core Commands
 
-- **`cmd <task>`** - Generate one-liner commands
+- **`cmd <task>`** - Generate one-liner commands with y/n/e options
 - **`run <plugin>`** - Execute specific plugin  
 - **`list [category]`** - Show plugins (optionally by category)
 - **`models`** - Show available AI models with capabilities
@@ -696,8 +784,22 @@ Welcome to the AI Fabric Shell with **Markdown rendering support**! All AI respo
 - **`status`** - System status with AI analysis
 - **`chat`** - AI chat mode with Markdown rendering
 - **`troubleshoot <issue>`** - Quick troubleshooting with formatted output
+- **`history`** - Show command execution history
 - **`help`** - Show this help
 - **`quit`** - Exit
+
+## Enhanced Features
+
+### ✨ Y/N/E Command Options
+When commands are generated, you now have three options:
+- **Y** - Execute the command
+- **N** - Cancel execution  
+- **E** - Explain what the command does (using AI)
+
+### 📚 Command History & Learning
+- Successful commands are automatically saved with context
+- Similar past commands inform future AI suggestions
+- View history with the `history` command
 
 ## Model Commands
 
@@ -716,12 +818,14 @@ Welcome to the AI Fabric Shell with **Markdown rendering support**! All AI respo
 - **Platform:** {self.platform.title()}
 - **Plugins:** {len(self.plugin_manager.list_plugins())} available
 - **Available Models:** {len(self.model_manager.available_models)}
+- **Command History:** {len(self.command_executor.history_manager.history)} entries
 
 ## Examples
 
 ```bash
 # Generate a command to find large Python files
 cmd find all python files larger than 1MB
+# When prompted: Y/N/E? Choose E to explain first, then Y to execute
 
 # Run code review plugin with optimal model selection
 run code_review
@@ -732,17 +836,19 @@ list development
 # Switch to code-optimized model
 switch codellama
 
-# Get troubleshooting help with formatted output
-troubleshoot docker container won't start
+# View your command history
+history
 ```
 
-## New Features
+## New Features in This Version
 
 - 🎨 **Rich Markdown Rendering** - AI responses display with proper formatting
 - 🤖 **Smart Model Switching** - Automatic optimal model selection per task
 - 📊 **Model Recommendations** - Get suggestions for different task types  
 - 🔧 **Plugin-Model Optimization** - Plugins automatically use best models
-- 📋 **Enhanced Categorization** - Better organization of plugins and features
+- 📋 **Enhanced Command Options** - Y/N/E prompts with AI explanations
+- 📚 **Command History & Learning** - Past successes inform future suggestions
+- 🔍 **Better Troubleshooting** - Enhanced error analysis and fixes
 """
         
         # Use the enhanced Markdown renderer for help
@@ -769,19 +875,21 @@ troubleshoot docker container won't start
 - **Platform:** {self.platform.title()}
 - **Plugins:** {len(self.plugin_manager.list_plugins())} available
 - **Models:** {len(self.model_manager.available_models)} available
+- **Command History:** {len(self.command_executor.history_manager.history)} entries
 
-## ✨ New Features
+## ✨ New Enhanced Features
 
-- 🎨 **Rich Markdown Rendering** - AI responses now display with proper formatting
-- 📊 **Smart Model Recommendations** - Get optimal model suggestions by task type
+- 🔍 **Y/N/E Command Options** - Get AI explanations before executing commands
+- 📚 **Smart Command Learning** - Past successful commands inform future suggestions
+- 🎨 **Rich Markdown Rendering** - AI responses with proper formatting
+- 📊 **Smart Model Recommendations** - Optimal model suggestions by task type
 - 🔧 **Plugin-Model Optimization** - Plugins automatically select best models
-- 📋 **Enhanced Documentation** - Better help and status information
 
 ## Quick Start
 
-Type **`help`** for all commands or **`models`** to see AI model options.
+Type **`help`** for all commands, **`history`** to see past commands, or **`models`** to see AI model options.
 
-*Ready to automate with AI!*"""
+*Ready to automate with enhanced AI!*"""
         
         # Use enhanced rendering for welcome message
         self.renderer.render_ai_response(welcome_content, "Welcome", "cyan")
@@ -816,6 +924,8 @@ Type **`help`** for all commands or **`models`** to see AI model options.
                     self.switch_model(model_name)
                 elif cmd_main == 'status':
                     self.show_status()
+                elif cmd_main in ['history', 'hist']:
+                    self.show_command_history()
                 elif cmd_main == 'chat':
                     self._chat_mode()
                 elif cmd_main == 'run':

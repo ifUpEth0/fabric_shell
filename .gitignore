@@ -1,0 +1,22 @@
+# Ignore Python cache files 
+*.pyc 
+__pycache__/
+
+# Exclude the 'venv' directory (assuming you're using virtualenv)
+/venv/
+
+# Exclude command history file│
+command_history.json
+
+# Ignore other common IDE metadata files
+.vscode/
+.idea/
+.pycharm/
+
+# Ignore any directories named '.DS_Store'
+.DS_Store
+
+# Ignore node_modules and npm cache folders 
+node_modules/
+.npm/
+package-lock.json   

@@ -1,6 +1,6 @@
 # AI Fabric Shell - Enhanced Edition
 
-A modular, AI-powered command-line automation tool with rich Markdown rendering, smart model switching, and an extensible plugin system.
+A modular, AI-powered command-line automation tool with rich Markdown rendering, smart model switching, command history learning, and an extensible plugin system.
 
 ## 🎯 Features
 
@@ -11,6 +11,9 @@ A modular, AI-powered command-line automation tool with rich Markdown rendering,
 - **📋 Enhanced UI** - Beautiful tables, syntax highlighting, and progress indicators
 - **🚀 Command Generation** - AI-powered one-liner command generation
 - **🔍 Smart Troubleshooting** - AI analysis of failed commands and scripts
+- **✨ Y/N/E Command Options** - Explain commands before executing them
+- **📚 Command History & Learning** - System learns from successful commands
+- **🛡️ Clean PowerShell Execution** - Runs without profile to avoid Oh My Posh errors
 
 ## 📁 Project Structure
 
@@ -33,7 +36,7 @@ fabric_shell/
 │   └── renderer.py            # ResponseRenderer class
 └── utils/
     ├── __init__.py
-    ├── commands.py            # Command execution utilities
+    ├── commands.py            # Enhanced command execution with history
     └── extractors.py          # Text/command extraction utilities
 ```
 
@@ -96,6 +99,7 @@ ai_fabric_shell/
 ├── setup.py                   # Package installation
 ├── requirements.txt           # Dependencies
 ├── README.md                  # This file
+├── command_history.json       # Auto-created command history
 └── fabric_shell/              # Main package
     ├── __init__.py
     ├── core/
@@ -121,7 +125,7 @@ ai_fabric_shell/
 
 ### Core Commands
 
-- **`cmd <task>`** - Generate one-liner commands
+- **`cmd <task>`** - Generate one-liner commands with Y/N/E options
 - **`run <plugin>`** - Execute specific plugin  
 - **`list [category]`** - Show plugins (optionally by category)
 - **`models`** - Show available AI models with capabilities
@@ -129,12 +133,54 @@ ai_fabric_shell/
 - **`status`** - System status with AI analysis
 - **`chat`** - AI chat mode with Markdown rendering
 - **`troubleshoot <issue>`** - Quick troubleshooting with formatted output
+- **`history`** - View command execution history and success patterns
+- **`help`** - Show comprehensive help
+- **`quit`** - Exit
+
+### ✨ Enhanced Command Flow
+
+When you generate commands, you now get three options:
+
+```bash
+fabric(llama3.1)> cmd find large Python files
+
+Generated BASH Command
+┌─────────────────────────────────────────┐
+│ find . -name "*.py" -size +1M -type f   │
+└─────────────────────────────────────────┘
+
+Execute command? [Y]es/[N]o/[E]xplain: e
+```
+
+**Y** - Execute the command immediately  
+**N** - Cancel and return to prompt  
+**E** - Get AI explanation of what the command does
+
+### 📚 Smart Learning System
+
+After successful execution, the system asks for confirmation:
+
+```bash
+Output
+┌─────────────────────────────────────────┐
+│ ./scripts/large_script.py              │
+│ ./data/process_data.py                  │
+└─────────────────────────────────────────┘
+
+Did this accomplish your goal: 'find large Python files'? [Y]es/[N]o: y
+✓ Command saved to history as successful
+```
+
+- Commands are only saved to history if they **actually solved your problem**
+- Future similar requests will reference successful patterns
+- View your history with `history` command
 
 ### Examples
 
 ```bash
-# Generate a command to find large Python files
+# Generate a command with explanation option
 cmd find all python files larger than 1MB
+# Choose E to explain, then Y to execute
 
 # Run code review plugin with optimal model selection
 run code_review
@@ -144,6 +190,9 @@ list development
 
 # Switch to code-optimized model
 switch codellama
+
+# View your successful command history
+history
 
 # Get troubleshooting help with formatted output
 troubleshoot docker container won't start
@@ -202,7 +251,7 @@ The shell automatically detects available Ollama models and provides intelligent
 - **`models/manager.py`** - AI model detection, switching, and recommendations
 - **`plugins/manager.py`** - Plugin loading, validation, and execution coordination
 - **`rendering/renderer.py`** - Markdown rendering and UI formatting
-- **`utils/commands.py`** - Command execution with proper error handling
+- **`utils/commands.py`** - Enhanced command execution with history tracking and Y/N/E options
 - **`utils/extractors.py`** - Text parsing and command extraction from AI responses
 
 ### Benefits of Modular Design
@@ -212,16 +261,45 @@ The shell automatically detects available Ollama models and provides intelligent
 - **Extensible** - Easy to add new features without affecting existing code
 - **Reusable** - Components can be imported and used independently
 
-## 🔄 Migration from Monolithic Version
+## ✨ Enhanced Features (New!)
 
-The refactored version maintains 100% compatibility with the original functionality while providing:
+### Y/N/E Command Options
 
-1. **Better Organization** - Related code grouped together
-2. **Cleaner Imports** - Clear dependencies between modules
-3. **Easier Testing** - Individual components can be unit tested
-4. **Improved Maintainability** - Changes isolated to specific areas
+Every generated command now offers three choices:
+- **[Y]es** - Execute immediately
+- **[N]o** - Cancel execution
+- **[E]xplain** - Get detailed AI explanation before deciding
 
-## 🎨 Enhanced Features
+### Smart Command Learning
+
+- **Success Tracking**: Only commands that actually solve problems are saved
+- **Pattern Recognition**: Similar tasks reference past successful commands
+- **Context Injection**: AI gets historical context for better suggestions
+- **User Confirmation**: "Did this work?" ensures quality learning data
+
+### Clean PowerShell Execution
+
+- **No Profile Loading**: PowerShell runs with `-NoProfile` flag
+- **No Oh My Posh Errors**: Eliminates theme and prompt customization issues
+- **Faster Execution**: Skip profile loading delays
+- **Consistent Environment**: Same clean PowerShell every time
+
+### Enhanced Error Handling
+
+- **Technical vs Functional Errors**: Distinguishes between execution errors and wrong results
+- **Alternative Approaches**: Offers different methods when commands don't meet expectations
+- **Smart Troubleshooting**: Context-aware error analysis and fixes
+
+## 🔄 Migration from Previous Versions
+
+The enhanced version maintains 100% compatibility with existing functionality while adding:
+
+1. **Better Command Interaction** - Y/N/E options for all generated commands
+2. **Learning System** - Builds knowledge from successful command patterns
+3. **Improved Reliability** - Clean PowerShell execution without profile interference
+4. **Enhanced User Experience** - Better confirmation flows and error handling
+
+## 🎨 Enhanced Features Details
 
 ### Rich Markdown Rendering
 
@@ -236,15 +314,30 @@ AI responses now support:
 ### Smart Model Selection
 
 - Plugins automatically use optimal models for their tasks
-- Model recommendations based on task complexity
+- Model recommendations based on task complexity and type
 - Seamless model switching with capability analysis
 
-### Improved User Experience
+### Command History Intelligence
 
-- Enhanced welcome messages with Markdown formatting
-- Better error handling and troubleshooting workflows
-- Comprehensive help system with examples
-- Real-time system status with AI analysis
+```bash
+# View your command history
+fabric(llama3.1)> history
+
+Command History (Last 10)
+┌────────────────────┬──────────────────────────────┬────────────────────────────────┬───────────┬────────┐
+│ Date               │ Task                         │ Command                        │ Shell     │ Status │
+├────────────────────┼──────────────────────────────┼────────────────────────────────┼───────────┼────────┤
+│ 2025-01-19 10:30   │ find large Python files     │ find . -name "*.py" -size +1M  │ bash      │ ✅     │
+│ 2025-01-19 10:25   │ check system memory          │ free -h                        │ bash      │ ✅     │
+└────────────────────┴──────────────────────────────┴────────────────────────────────┴───────────┴────────┘
+```
+
+## 🚀 Performance Improvements
+
+- **Faster Command Generation**: Historical context helps AI make better suggestions faster
+- **Reduced Trial and Error**: Learn from past successes instead of repeating failures
+- **Clean Execution Environment**: No profile loading delays or errors
+- **Smart Model Routing**: Right model for each task type automatically
 
 ## 🤝 Contributing
 
@@ -257,3 +350,18 @@ AI responses now support:
 ## 📝 License
 
 MIT License - feel free to use and modify as needed.
+
+---
+
+## 🆕 What's New in This Version
+
+### Version 2.1.0 - Enhanced Command Intelligence
+
+- **🔍 Y/N/E Command Options** - Explain any command before executing
+- **📚 Smart Learning System** - Learns from commands that actually work
+- **🛡️ Clean PowerShell** - No more Oh My Posh or profile errors
+- **🎯 User Confirmation Flow** - Only save commands that solve the actual problem
+- **🔄 Alternative Approaches** - Get different methods when first attempt doesn't work
+- **📊 Enhanced History** - View and learn from successful command patterns
+
+Ready to automate with enhanced AI intelligence! 🎯
