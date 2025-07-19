@@ -1,269 +1,259 @@
-# AI Fabric Shell
+# AI Fabric Shell - Enhanced Edition
 
-A powerful local AI automation tool that combines the intelligence of large language models with system administration capabilities. Generate commands, troubleshoot issues, and automate tasks using natural language through an extensible plugin system.
+A modular, AI-powered command-line automation tool with rich Markdown rendering, smart model switching, and an extensible plugin system.
 
-## 🚀 Features
+## 🎯 Features
 
-- **Smart Command Generation**: Generate shell commands from natural language descriptions
-- **Cross-Platform Support**: Works on Windows (PowerShell/CMD), macOS, and Linux (bash/zsh/fish)
-- **Plugin System**: Extensible YAML-based plugins for specialized tasks
-- **AI-Powered Troubleshooting**: Automatic error analysis and fix suggestions
-- **Rich Terminal UI**: Beautiful console interface with syntax highlighting
-- **Local AI**: Uses Ollama for complete privacy and offline operation
-- **Multi-Shell Detection**: Automatically detects and adapts to your current shell environment
+- **🎨 Rich Markdown Rendering** - AI responses display with proper formatting
+- **🤖 Smart Model Management** - Automatic optimal model selection per task
+- **📊 Model Recommendations** - Get suggestions for different task types
+- **🔧 Plugin System** - YAML-based plugins with model optimization
+- **📋 Enhanced UI** - Beautiful tables, syntax highlighting, and progress indicators
+- **🚀 Command Generation** - AI-powered one-liner command generation
+- **🔍 Smart Troubleshooting** - AI analysis of failed commands and scripts
 
-## 📋 Prerequisites
+## 📁 Project Structure
 
-- **Python 3.8+**
-- **Ollama** - Local AI model server
-- At least one language model installed via Ollama
-
-## 🛠️ Installation
-
-### 1. Install Ollama
-
-Visit [ollama.ai](https://ollama.ai) and install Ollama for your platform.
-
-### 2. Pull a Language Model
-
-```bash
-# Recommended models
-ollama pull llama3.1        # General purpose, good balance
-ollama pull codellama       # Code-focused tasks
-ollama pull mistral         # Fast and efficient
+```
+fabric_shell/
+├── __init__.py                 # Package initialization
+├── main.py                     # Entry point
+├── core/
+│   ├── __init__.py
+│   ├── shell.py               # Main AIFabricShell class
+│   └── system_info.py         # SystemInfo class
+├── models/
+│   ├── __init__.py
+│   └── manager.py             # ModelManager class
+├── plugins/
+│   ├── __init__.py
+│   └── manager.py             # PluginManager class
+├── rendering/
+│   ├── __init__.py
+│   └── renderer.py            # ResponseRenderer class
+└── utils/
+    ├── __init__.py
+    ├── commands.py            # Command execution utilities
+    └── extractors.py          # Text/command extraction utilities
 ```
 
-### 3. Install Dependencies
+## 🚀 Installation & Setup
 
-```bash
-pip install ollama rich pyyaml psutil
-```
-
-### 4. Clone and Run
-
-```bash
-git clone https://github.com/yourusername/ai-fabric-shell.git
-cd ai-fabric-shell
-python fabric_shell.py
-```
-
-## 🎯 Quick Start
-
-1. **Start Ollama service** (if not already running):
+### Option 1: Simple Run (Recommended)
+1. **Download/Clone the files** to a directory
+2. **Install dependencies**
    ```bash
+   pip install -r requirements.txt
+   ```
+3. **Install Ollama**
+   ```bash
+   # Visit https://ollama.ai for installation instructions
    ollama serve
+   ollama pull llama3.1
    ```
-
-2. **Launch AI Fabric Shell**:
+4. **Run the shell**
    ```bash
-   python fabric_shell.py
+   # Windows
+   fabric.bat
+   
+   # Or use Python directly
+   python run.py
+   
+   # Linux/Mac
+   chmod +x fabric.sh
+   ./fabric.sh
+   
+   # Or use Python directly
+   python3 run.py
    ```
 
-3. **Try some commands**:
-   ```
-   fabric> cmd find all python files larger than 1MB
-   fabric> run troubleshooter
-   fabric> status
-   fabric> chat
-   ```
+### Option 2: Install as Package
+```bash
+# Install in development mode
+pip install -e .
 
-## 🔧 Core Commands
+# Or install normally
+pip install .
 
-| Command | Description |
-|---------|-------------|
-| `cmd <task>` | Generate and execute one-liner commands |
-| `run <plugin>` | Execute a specific plugin |
-| `list` | Show available plugins |
-| `status` | Display system status with AI analysis |
-| `chat` | Enter free-form AI chat mode |
-| `troubleshoot <issue>` | Quick AI troubleshooting |
-| `help` | Show available commands |
-| `quit` | Exit the application |
+# Then run from anywhere
+fabric-shell
+```
 
-## 🔌 Plugin System
+### Option 3: Direct Python Execution
+```bash
+python main.py
+```
 
-AI Fabric Shell uses YAML-based plugins for specialized tasks. Plugins are stored in the `plugins/` directory.
+## 📁 Required Directory Structure
 
-### Available Plugins
+Make sure your directory looks like this:
+```
+ai_fabric_shell/
+├── main.py                    # Entry point option 1
+├── run.py                     # Entry point option 2 (recommended)
+├── fabric.bat                 # Windows batch script
+├── fabric.sh                  # Unix shell script
+├── setup.py                   # Package installation
+├── requirements.txt           # Dependencies
+├── README.md                  # This file
+└── fabric_shell/              # Main package
+    ├── __init__.py
+    ├── core/
+    │   ├── __init__.py
+    │   ├── shell.py
+    │   └── system_info.py
+    ├── models/
+    │   ├── __init__.py
+    │   └── manager.py
+    ├── plugins/
+    │   ├── __init__.py
+    │   └── manager.py
+    ├── rendering/
+    │   ├── __init__.py
+    │   └── renderer.py
+    └── utils/
+        ├── __init__.py
+        ├── commands.py
+        └── extractors.py
+```
 
-| Plugin | Category | Description |
-|--------|----------|-------------|
-| `cmd_generator` | Automation | Generate single-line commands |
-| `script_generator` | Automation | Create automation scripts |
-| `quick_command` | Automation | Fast command generation |
-| `code_review` | Development | Review code quality and security |
-| `docker_helper` | Containers | Docker configurations and troubleshooting |
-| `file_operations` | System | File and directory operations |
-| `log_analyzer` | System | Analyze log files for issues |
-| `troubleshooter` | System | Diagnose system problems |
-| `security_audit` | Security | Security configuration audits |
-| `performance_optimizer` | Performance | System performance analysis |
-| `deployment_planner` | Deployment | Plan application deployments |
+## 🎮 Usage
 
-### Creating Custom Plugins
+### Core Commands
 
-Create a YAML file in the `plugins/` directory:
+- **`cmd <task>`** - Generate one-liner commands
+- **`run <plugin>`** - Execute specific plugin  
+- **`list [category]`** - Show plugins (optionally by category)
+- **`models`** - Show available AI models with capabilities
+- **`switch [model]`** - Switch AI model (interactive if no model specified)
+- **`status`** - System status with AI analysis
+- **`chat`** - AI chat mode with Markdown rendering
+- **`troubleshoot <issue>`** - Quick troubleshooting with formatted output
+
+### Examples
+
+```bash
+# Generate a command to find large Python files
+cmd find all python files larger than 1MB
+
+# Run code review plugin with optimal model selection
+run code_review
+
+# List development category plugins
+list development
+
+# Switch to code-optimized model
+switch codellama
+
+# Get troubleshooting help with formatted output
+troubleshoot docker container won't start
+```
+
+## 🔧 Plugin Development
+
+Plugins are YAML files stored in the `plugins/` directory:
 
 ```yaml
-name: my_plugin
-description: My custom automation plugin
-category: automation
+name: "example_plugin"
+description: "Example plugin description"
+category: "development"
+preferred_model: "codellama"  # Optional: specify preferred model
+model_category: "code"        # Optional: specify model category
+
 parameters:
   task:
-    type: string
-    prompt: "What should this plugin do?"
-    required: true
+    prompt: "What task would you like to accomplish?"
+    type: "string"
+
 prompt: |
-  Help the user accomplish: {task}
+  Help the user accomplish this task: {task}
   
-  Provide step-by-step instructions.
+  Provide detailed instructions and code examples.
+
 context: |
-  You are an expert assistant helping with automation tasks.
+  The user is working on: {task}
+
 post_process:
-  type: execute
-  confirm: true
+  type: "execute"  # Optional: extract and execute code from response
 ```
 
-## 💡 Usage Examples
+## 🤖 Model Management
 
-### Generate Commands
-```
-fabric> cmd compress all log files older than 30 days
-Generated BASH Command:
-find /var/log -name "*.log" -mtime +30 -exec gzip {} \;
+The shell automatically detects available Ollama models and provides intelligent recommendations:
 
-Execute: find /var/log -name "*.log" -mtime +30 -exec gzip {} \;? (y/n)
-```
+- **Code Tasks**: CodeLlama, CodeGemma
+- **Analysis**: Mixtral, Llama3.2
+- **Quick Commands**: Phi3, Mistral
+- **Security**: Mixtral, Llama3.2
+- **Performance**: Mixtral, Llama3.2
 
-### Code Review
-```
-fabric> run code_review
-Enter path to code file: ./my_script.py
-```
+## 📦 Dependencies
 
-### System Status
-```
-fabric> status
-┌─ System Status ─┐  ┌─ AI Analysis ─┐
-│ CPU Usage: 45%  │  │ • CPU usage is │
-│ Memory: 67%     │  │   moderate      │
-│ Disk: 23%       │  │ • Consider      │
-└─────────────────┘  │   monitoring... │
-                     └─────────────────┘
-```
+- **rich** - Terminal UI and Markdown rendering
+- **ollama** - AI model interaction
+- **PyYAML** - Plugin configuration parsing
+- **psutil** - System information gathering
 
-### Troubleshooting
-```
-fabric> troubleshoot docker container won't start
-AI is analyzing the issue...
+## 🏗️ Architecture
 
-Troubleshooting Guide:
-1. Check container logs: docker logs <container-name>
-2. Verify port conflicts: netstat -tulpn
-3. Check resource availability...
-```
+### Separation of Concerns
 
-## 🔍 Testing Ollama Connection
+- **`core/shell.py`** - Main application orchestration and command routing
+- **`models/manager.py`** - AI model detection, switching, and recommendations
+- **`plugins/manager.py`** - Plugin loading, validation, and execution coordination
+- **`rendering/renderer.py`** - Markdown rendering and UI formatting
+- **`utils/commands.py`** - Command execution with proper error handling
+- **`utils/extractors.py`** - Text parsing and command extraction from AI responses
 
-If you encounter connection issues, use the included test script:
+### Benefits of Modular Design
 
-```bash
-python ollama_test.py
-```
+- **Maintainable** - Each component has a single responsibility
+- **Testable** - Individual modules can be tested in isolation
+- **Extensible** - Easy to add new features without affecting existing code
+- **Reusable** - Components can be imported and used independently
 
-This will help diagnose:
-- Ollama service connectivity
-- Available models
-- Chat functionality
+## 🔄 Migration from Monolithic Version
 
-## 🛡️ Security Features
+The refactored version maintains 100% compatibility with the original functionality while providing:
 
-- **Command Confirmation**: All generated commands require user confirmation before execution
-- **Timeout Protection**: Commands automatically timeout after 30 seconds
-- **Error Handling**: Comprehensive error handling and reporting
-- **Local Processing**: No data sent to external services
+1. **Better Organization** - Related code grouped together
+2. **Cleaner Imports** - Clear dependencies between modules
+3. **Easier Testing** - Individual components can be unit tested
+4. **Improved Maintainability** - Changes isolated to specific areas
 
-## 🎨 Rich Terminal Interface
+## 🎨 Enhanced Features
 
-- **Syntax Highlighting**: Commands displayed with proper syntax coloring
-- **Progress Indicators**: Visual feedback for AI processing
-- **Formatted Output**: Clean, readable command output
-- **Error Display**: Clear error messages with troubleshooting suggestions
+### Rich Markdown Rendering
 
-## 🔧 Configuration
+AI responses now support:
+- Headers (##, ###, ####)
+- Code blocks with syntax highlighting
+- Lists (bulleted and numbered)
+- **Bold** and *italic* text
+- Tables
+- Links
 
-### Environment Variables
+### Smart Model Selection
 
-- `SHELL`: Automatically detected, but can be overridden
-- `PSModulePath`: Used to detect PowerShell on Windows
+- Plugins automatically use optimal models for their tasks
+- Model recommendations based on task complexity
+- Seamless model switching with capability analysis
 
-### Model Selection
+### Improved User Experience
 
-The application will prompt you to select a model if the default isn't available:
-
-```
-Available models: llama3.1, codellama, mistral
-Select a model [llama3.1]:
-```
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Ollama Connection Failed**
-```bash
-# Check if Ollama is running
-ollama list
-
-# Start Ollama service
-ollama serve
-
-# Test manually
-ollama run llama3.1 "hello"
-```
-
-**No Models Available**
-```bash
-# Pull a model
-ollama pull llama3.1
-```
-
-**Command Timeout**
-- Commands are limited to 30 seconds
-- For longer operations, run commands manually
-- Consider breaking complex tasks into smaller steps
+- Enhanced welcome messages with Markdown formatting
+- Better error handling and troubleshooting workflows
+- Comprehensive help system with examples
+- Real-time system status with AI analysis
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Add your changes and tests
-4. Submit a pull request
-
-### Plugin Contributions
-
-We welcome new plugins! Follow the existing plugin structure and include:
-- Clear description and category
-- Proper parameter definitions
-- Helpful examples
-- Documentation
+2. Create a feature branch
+3. Make your changes in the appropriate module
+4. Add tests for new functionality
+5. Submit a pull request
 
 ## 📝 License
 
-MIT License - see LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- [Ollama](https://ollama.ai) - Local AI model server
-- [Rich](https://github.com/Textualize/rich) - Terminal formatting
-- [PyYAML](https://pyyaml.org/) - Plugin configuration parsing
-
-## 📞 Support
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/ai-fabric-shell/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/ai-fabric-shell/discussions)
-- **Documentation**: Check the `plugins/` directory for examples
-
----
-
-**Made with ❤️ for system administrators, developers, and AI enthusiasts**
+MIT License - feel free to use and modify as needed.

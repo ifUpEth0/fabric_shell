@@ -1,417 +1,84 @@
-#!/usr/bin/env python3
 """
-AI Fabric Shell - Local AI automation with Rich UI, plugin system, model switching, and Markdown rendering
+Main AI Fabric Shell application class
 """
 
 import os
-import sys
-import yaml
-import ollama
-import subprocess
 import platform
 import psutil
+import ollama
 import re
-import glob
-import shutil
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any
 from rich.console import Console
 from rich.panel import Panel
-from rich.syntax import Syntax
 from rich.prompt import Prompt, Confirm
-from rich.table import Table
-from rich.columns import Columns
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.text import Text
-from rich.markdown import Markdown
-from rich.rule import Rule
+
+from ..models.manager import ModelManager
+from ..plugins.manager import PluginManager
+from ..rendering.renderer import ResponseRenderer
+from ..core.system_info import SystemInfo
+from ..utils.commands import CommandExecutor
+from ..utils.extractors import TextExtractor
 
 console = Console()
-
-class ResponseRenderer:
-    """Handles rendering AI responses with proper Markdown support"""
-    
-    @staticmethod
-    def render_ai_response(content: str, title: str = "AI Response", border_style: str = "green") -> None:
-        """Render AI response with proper Markdown formatting"""
-        try:
-            # Check if content contains significant Markdown elements
-            markdown_indicators = [
-                '##', '###', '####',  # Headers
-                '```',                # Code blocks
-                '- ',                 # Lists
-                '* ',                 # Lists
-                '1. ', '2. ',         # Numbered lists
-                '**',                 # Bold
-                '*',                  # Italic
-                '[',                  # Links
-                '|',                  # Tables
-            ]
-            
-            has_markdown = any(indicator in content for indicator in markdown_indicators)
-            
-            if has_markdown:
-                # Use Rich Markdown renderer
-                md = Markdown(content, code_theme="monokai")
-                console.print(Panel(md, title=f"[bold]{title}[/bold]", border_style=border_style))
-            else:
-                # Use regular panel for simple text
-                console.print(Panel(content, title=f"[bold]{title}[/bold]", border_style=border_style))
-                
-        except Exception as e:
-            # Fallback to regular panel if Markdown rendering fails
-            console.print(Panel(content, title=f"[bold]{title}[/bold]", border_style=border_style))
-            console.print(f"[dim yellow]Note: Markdown rendering failed: {e}[/dim yellow]")
-    
-    @staticmethod
-    def render_code_block(code: str, language: str, title: str = "Code") -> None:
-        """Render code block with syntax highlighting"""
-        console.print(Panel(
-            Syntax(code, language, theme="monokai", line_numbers=True),
-            title=f"[bold]{title}[/bold]",
-            border_style="yellow"
-        ))
-    
-    @staticmethod
-    def render_section_divider(text: str = None) -> None:
-        """Render a section divider"""
-        if text:
-            console.print(Rule(f"[bold cyan]{text}[/bold cyan]"))
-        else:
-            console.print(Rule())
-
-class ModelManager:
-    """Manages AI model selection and switching"""
-    
-    def __init__(self):
-        self.current_model = "llama3.1"  # Default model
-        self.available_models = []
-        self.model_info = {}
-        self._detect_models()
-    
-    def _detect_models(self):
-        """Detect available Ollama models and their capabilities"""
-        try:
-            models_response = ollama.list()
-            self.available_models = self._extract_models(models_response)
-            self._analyze_model_capabilities()
-        except Exception as e:
-            console.print(f"[red]Error detecting models: {e}[/red]")
-    
-    def _extract_models(self, models_response) -> List[str]:
-        """Extract model names from various response formats"""
-        if isinstance(models_response, dict):
-            models_list = models_response.get('models', [])
-        elif hasattr(models_response, 'models'):
-            models_list = models_response.models
-        else:
-            models_list = models_response
-        
-        models = []
-        for model in models_list:
-            if hasattr(model, 'model'):
-                models.append(model.model)
-            elif isinstance(model, dict):
-                name = model.get('name') or model.get('model') or model.get('id')
-                if name:
-                    models.append(name)
-            elif isinstance(model, str):
-                models.append(model)
-        return models
-    
-    def _analyze_model_capabilities(self):
-        """Analyze and categorize model capabilities"""
-        model_profiles = {
-            # Code-focused models
-            'codellama': {
-                'category': 'code',
-                'description': 'Specialized for code generation and analysis',
-                'strengths': ['Programming', 'Code review', 'Debugging', 'Script generation'],
-                'best_for': ['code_review', 'script_generator', 'docker_helper'],
-                'size': 'Large',
-                'speed': 'Medium'
-            },
-            'codegemma': {
-                'category': 'code',
-                'description': 'Google\'s code-focused model',
-                'strengths': ['Code completion', 'Refactoring', 'Documentation'],
-                'best_for': ['code_review', 'script_generator'],
-                'size': 'Medium',
-                'speed': 'Fast'
-            },
-            
-            # General purpose models
-            'llama3.1': {
-                'category': 'general',
-                'description': 'Balanced model for general tasks',
-                'strengths': ['General knowledge', 'Problem solving', 'Command generation'],
-                'best_for': ['cmd_generator', 'troubleshooter', 'quick_command'],
-                'size': 'Large',
-                'speed': 'Medium'
-            },
-            'llama3.2': {
-                'category': 'general',
-                'description': 'Latest Llama model with improved capabilities',
-                'strengths': ['Reasoning', 'Analysis', 'System administration'],
-                'best_for': ['troubleshooter', 'security_audit', 'performance_optimizer'],
-                'size': 'Large',
-                'speed': 'Medium'
-            },
-            'mistral': {
-                'category': 'general',
-                'description': 'Fast and efficient general-purpose model',
-                'strengths': ['Quick responses', 'System commands', 'Basic troubleshooting'],
-                'best_for': ['cmd_generator', 'quick_command', 'file_operations'],
-                'size': 'Medium',
-                'speed': 'Fast'
-            },
-            'mixtral': {
-                'category': 'analysis',
-                'description': 'Mixture of experts model for complex reasoning',
-                'strengths': ['Complex analysis', 'Multi-step reasoning', 'Performance optimization'],
-                'best_for': ['performance_optimizer', 'security_audit', 'log_analyzer'],
-                'size': 'Large',
-                'speed': 'Slow'
-            },
-            
-            # Specialized models
-            'phi3': {
-                'category': 'lightweight',
-                'description': 'Small, efficient model for quick tasks',
-                'strengths': ['Speed', 'Low resource usage', 'Simple commands'],
-                'best_for': ['quick_command', 'file_operations'],
-                'size': 'Small',
-                'speed': 'Very Fast'
-            },
-            'gemma': {
-                'category': 'general',
-                'description': 'Google\'s efficient general model',
-                'strengths': ['Balanced performance', 'Good reasoning'],
-                'best_for': ['troubleshooter', 'deployment_planner'],
-                'size': 'Medium',
-                'speed': 'Fast'
-            }
-        }
-        
-        # Populate model info for available models
-        for model in self.available_models:
-            # Extract base model name (remove version suffixes)
-            base_name = re.split(r'[:.-]', model.lower())[0]
-            
-            # Find matching profile
-            profile = None
-            for profile_name, profile_data in model_profiles.items():
-                if profile_name in model.lower() or base_name == profile_name:
-                    profile = profile_data.copy()
-                    break
-            
-            # Default profile for unknown models
-            if not profile:
-                profile = {
-                    'category': 'unknown',
-                    'description': 'Unknown model capabilities',
-                    'strengths': ['General tasks'],
-                    'best_for': [],
-                    'size': 'Unknown',
-                    'speed': 'Unknown'
-                }
-            
-            self.model_info[model] = profile
-    
-    def get_best_model_for_plugin(self, plugin_name: str) -> str:
-        """Get the best available model for a specific plugin"""
-        # Check if plugin has a preferred model that's available
-        for model, info in self.model_info.items():
-            if plugin_name in info.get('best_for', []):
-                return model
-        
-        # Fallback to current model
-        return self.current_model
-    
-    def switch_model(self, model_name: str) -> bool:
-        """Switch to a different model"""
-        if model_name not in self.available_models:
-            console.print(f"[red]Model '{model_name}' not available[/red]")
-            return False
-        
-        # Test the model before switching
-        try:
-            ollama.chat(model=model_name, messages=[{'role': 'user', 'content': 'test'}])
-            self.current_model = model_name
-            console.print(f"[green]✓ Switched to model: {model_name}[/green]")
-            return True
-        except Exception as e:
-            console.print(f"[red]Failed to switch to {model_name}: {e}[/red]")
-            return False
-    
-    def list_models(self) -> Table:
-        """Create a table of available models with their info"""
-        table = Table(title="Available AI Models")
-        table.add_column("Model", style="cyan", no_wrap=True)
-        table.add_column("Category", style="magenta")
-        table.add_column("Size", style="yellow")
-        table.add_column("Speed", style="green")
-        table.add_column("Description", style="white")
-        table.add_column("Current", justify="center")
-        
-        for model in self.available_models:
-            info = self.model_info.get(model, {})
-            current_marker = "🟢" if model == self.current_model else ""
-            
-            table.add_row(
-                model,
-                info.get('category', 'unknown'),
-                info.get('size', 'Unknown'),
-                info.get('speed', 'Unknown'),
-                info.get('description', 'No description'),
-                current_marker
-            )
-        
-        return table
-    
-    def get_model_recommendations(self, task_type: str) -> List[Tuple[str, str]]:
-        """Get model recommendations for a task type"""
-        recommendations = []
-        
-        task_categories = {
-            'code': ['codellama', 'codegemma'],
-            'analysis': ['mixtral', 'llama3.2', 'llama3.1'],
-            'quick': ['phi3', 'mistral', 'gemma'],
-            'general': ['llama3.1', 'llama3.2', 'mistral'],
-            'security': ['mixtral', 'llama3.2'],
-            'performance': ['mixtral', 'llama3.2']
-        }
-        
-        preferred_models = task_categories.get(task_type, task_categories['general'])
-        
-        for model_preference in preferred_models:
-            for available_model in self.available_models:
-                if model_preference in available_model.lower():
-                    info = self.model_info.get(available_model, {})
-                    reason = f"Best for: {', '.join(info.get('strengths', []))}"
-                    recommendations.append((available_model, reason))
-                    break
-        
-        return recommendations[:3]  # Top 3 recommendations
-
-class SystemInfo:
-    """Detect and provide system information for AI context"""
-    
-    def __init__(self):
-        self.os_name = platform.system()
-        self.os_version = platform.version()
-        self.architecture = platform.machine()
-        self.python_version = platform.python_version()
-        self.available_tools = self._detect_tools()
-        
-    def _detect_tools(self) -> Dict[str, bool]:
-        """Detect available command-line tools"""
-        tools = {
-            'git': shutil.which('git') is not None,
-            'docker': shutil.which('docker') is not None,
-            'python': shutil.which('python') is not None,
-            'node': shutil.which('node') is not None,
-            'npm': shutil.which('npm') is not None,
-            'curl': shutil.which('curl') is not None,
-            'wget': shutil.which('wget') is not None,
-            'ssh': shutil.which('ssh') is not None,
-        }
-        
-        # Windows specific
-        if self.os_name == 'Windows':
-            tools.update({
-                'powershell': shutil.which('powershell') is not None,
-                'cmd': True,  # cmd is always available on Windows
-                'wsl': shutil.which('wsl') is not None,
-            })
-        
-        return tools
-    
-    def get_context_string(self) -> str:
-        """Generate context string for AI interactions"""
-        available_tools = [tool for tool, available in self.available_tools.items() if available]
-        
-        context = f"""System Context:
-- OS: {self.os_name} {self.os_version}
-- Architecture: {self.architecture}
-- Python: {self.python_version}
-- Available tools: {', '.join(available_tools)}"""
-        
-        if self.os_name == 'Windows':
-            context += f"\n- Running in Windows environment with PowerShell/CMD support"
-        elif self.os_name == 'Darwin':
-            context += f"\n- Running on macOS with standard Unix utilities"
-        else:
-            context += f"\n- Running on Linux/Unix with standard shell utilities"
-            
-        return context
-
-class PluginManager:
-    """Manages loading and execution of AI automation plugins"""
-    
-    def __init__(self, plugins_dir: str = "plugins"):
-        self.plugins_dir = Path(plugins_dir)
-        self.plugins_dir.mkdir(exist_ok=True)
-        self.plugins = {}
-        self._load_plugins()
-    
-    def _load_plugins(self):
-        """Load all YAML plugin files"""
-        for plugin_file in self.plugins_dir.glob("*.y*ml"):
-            try:
-                with open(plugin_file, 'r') as f:
-                    plugin_data = yaml.safe_load(f)
-                    self.plugins[plugin_file.stem] = plugin_data
-                console.print(f"[green]✓[/green] Loaded plugin: {plugin_file.stem}")
-            except Exception as e:
-                console.print(f"[red]✗[/red] Failed to load {plugin_file}: {e}")
-    
-    def get_plugin(self, name: str) -> Optional[Dict[str, Any]]:
-        return self.plugins.get(name)
-    
-    def list_plugins(self) -> List[str]:
-        return list(self.plugins.keys())
-    
-    def get_plugin_info(self, name: str) -> Dict[str, Any]:
-        plugin = self.get_plugin(name)
-        if not plugin:
-            return {}
-        return {
-            'name': name,
-            'description': plugin.get('description', 'No description'),
-            'category': plugin.get('category', 'general'),
-            'parameters': plugin.get('parameters', {}),
-            'examples': plugin.get('examples', []),
-            'preferred_model': plugin.get('preferred_model', None),
-            'model_category': plugin.get('model_category', None)
-        }
-    
-    def get_plugins_by_category(self) -> Dict[str, List[str]]:
-        """Group plugins by category"""
-        categories = {}
-        for name, plugin in self.plugins.items():
-            category = plugin.get('category', 'general')
-            if category not in categories:
-                categories[category] = []
-            categories[category].append(name)
-        return categories
 
 class AIFabricShell:
     """Main application class with enhanced Markdown rendering"""
     
     def __init__(self, model: str = "llama3.1"):
+        """
+        Initialize the AI Fabric Shell application.
+
+        Args:
+            model (str): Initial AI model to use. Defaults to "llama3.1".
+
+        Notes:
+            1. Finds the plugins directory by searching the following locations in order:
+                - `./plugins`
+                - `./fabric_shell/plugins`
+                - `~/.fabric_shell/plugins`
+            2. Tests the Ollama connection and switches to the specified model if it exists.
+        """
         self.model_manager = ModelManager()
         self.system_info = SystemInfo()
-        self.plugin_manager = PluginManager()
+        
+        # Find plugins directory - try multiple locations
+        plugins_dir = self._find_plugins_directory()
+        self.plugin_manager = PluginManager(str(plugins_dir))
+        
+        self.renderer = ResponseRenderer()
+        self.command_executor = CommandExecutor()
+        self.text_extractor = TextExtractor()
+        
         self.platform = platform.system().lower()
         self.current_shell = self._detect_shell()
-        self.renderer = ResponseRenderer()
         
         # Set initial model
         if model in self.model_manager.available_models:
             self.model_manager.current_model = model
         
         self._test_ollama()
+    
+    def _find_plugins_directory(self) -> Path:
+        """Find the plugins directory in various possible locations"""
+        # Get the directory where run.py or main.py is located
+        possible_locations = [
+            Path.cwd() / "plugins",  # Current working directory
+            Path(__file__).parent.parent.parent / "plugins",  # Go up from fabric_shell/core/shell.py
+            Path(__file__).parent.parent / "plugins",  # fabric_shell/plugins
+            Path(__file__).parent / "plugins",  # fabric_shell/core/plugins
+        ]
+        
+        for location in possible_locations:
+            if location.exists() and any(location.glob("*.y*ml")):
+                console.print(f"[green]Found plugins directory: {location}[/green]")
+                return location
+        
+        # Default: create in current working directory
+        default_location = Path.cwd() / "plugins"
+        console.print(f"[yellow]No existing plugins found, using: {default_location}[/yellow]")
+        return default_location
     
     def _detect_shell(self) -> str:
         """Detect the current shell being used"""
@@ -429,7 +96,7 @@ class AIFabricShell:
         try:
             if not self.model_manager.available_models:
                 console.print("[red]No models available. Install with: ollama pull llama3.1[/red]")
-                sys.exit(1)
+                raise SystemExit(1)
             
             # Check if current model exists
             current_model = self.model_manager.current_model
@@ -452,7 +119,7 @@ class AIFabricShell:
             console.print("1. Install Ollama: https://ollama.ai")
             console.print("2. Start service: ollama serve") 
             console.print("3. Pull model: ollama pull llama3.1")
-            sys.exit(1)
+            raise SystemExit(1)
     
     def _chat_with_ai(self, prompt: str, context: str = "", model: str = None) -> str:
         """Send prompt to AI with system context and handle response formats"""
@@ -479,193 +146,6 @@ class AIFabricShell:
             
         except Exception as e:
             return f"AI communication error: {e}"
-    
-    def _execute_command(self, command: str, language: str = None, confirm: bool = True) -> Dict[str, Any]:
-        """Execute shell command with confirmation"""
-        language = language or self.current_shell
-        
-        if confirm and not Confirm.ask(f"Execute: [cyan]{command[:100]}{'...' if len(command) > 100 else ''}[/cyan]?"):
-            return {'cancelled': True}
-        
-        try:
-            with console.status("[yellow]Executing...", spinner="dots"):
-                # Build command based on shell type
-                if language == "powershell":
-                    cmd = ["powershell", "-Command", command]
-                elif language == "python":
-                    cmd = ["python", "-c", command]
-                else:
-                    cmd = command
-                
-                result = subprocess.run(
-                    cmd,
-                    shell=(language not in ["powershell", "python"]),
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                    encoding='utf-8',
-                    errors='replace'
-                )
-            
-            return {
-                'success': result.returncode == 0,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-                'returncode': result.returncode
-            }
-        except subprocess.TimeoutExpired:
-            return {'error': 'Command timed out'}
-        except Exception as e:
-            return {'error': str(e)}
-    
-    def _execute_raw_command(self, command: str) -> Dict[str, Any]:
-        """Execute raw command without confirmation (for passthrough)"""
-        try:
-            with console.status(f"[yellow]Executing: {command[:50]}...[/yellow]", spinner="dots"):
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                    encoding='utf-8',
-                    errors='replace'
-                )
-            
-            return {
-                'success': result.returncode == 0,
-                'stdout': result.stdout,
-                'stderr': result.stderr,
-                'returncode': result.returncode,
-                'command': command
-            }
-        except subprocess.TimeoutExpired:
-            return {'error': 'Command timed out', 'command': command}
-        except Exception as e:
-            return {'error': str(e), 'command': command}
-    
-    def _handle_unknown_command(self, command: str):
-        """Handle unrecognized commands by passing through to shell"""
-        console.print(f"[yellow]Passing through to {self.current_shell}: {command}[/yellow]")
-        
-        result = self._execute_raw_command(command)
-        error = self._show_result(result, f"Command '{command}' executed successfully")
-        
-        if error:
-            console.print(f"[red]Command failed: {command}[/red]")
-            if Confirm.ask("[yellow]Would you like AI to analyze and suggest a fix?[/yellow]"):
-                self._troubleshoot_passthrough_error(command, error)
-    
-    def _troubleshoot_passthrough_error(self, command: str, error: str):
-        """Troubleshoot failed passthrough commands"""
-        prompt = f"""A {self.current_shell} command failed. Analyze the error and provide a corrected command.
-
-**Failed Command:** {command}
-**Error:** {error}
-**Shell:** {self.current_shell}
-**Platform:** {self.platform}
-
-Provide:
-1. Brief explanation of what went wrong
-2. Corrected command that should work
-3. Alternative approaches if applicable
-
-Format your response with clear sections and code blocks for any commands."""
-        
-        console.print(Panel("🔍 AI analyzing failed command...", 
-                          title="[yellow]Command Troubleshooting[/yellow]", border_style="yellow"))
-        
-        with console.status("[yellow]AI troubleshooting...", spinner="dots"):
-            response = self._chat_with_ai(prompt)
-        
-        # Use enhanced Markdown rendering
-        self.renderer.render_ai_response(response, "AI Analysis & Fix", "blue")
-        
-        # Try to extract a corrected command
-        corrected = self._extract_clean_command(response)
-        if corrected and corrected != command:
-            self.renderer.render_code_block(corrected, self.current_shell, "Suggested Fix")
-            
-            if Confirm.ask("[green]Try the suggested fix?[/green]"):
-                result = self._execute_command(corrected, self.current_shell)
-                self._show_result(result, "Fixed command executed successfully!")
-    
-    def _extract_clean_command(self, text: str) -> str:
-        """Extract clean command from AI response"""
-        # Remove markdown and backticks more aggressively
-        text = re.sub(r'```[\w]*\s*', '', text)
-        text = re.sub(r'```', '', text)
-        text = text.replace('`', '')
-        
-        # Remove common AI response patterns
-        text = re.sub(r'\*\*[^*]+\*\*', '', text)  # Remove **bold** text
-        text = re.sub(r'^\s*[\*\-]\s*', '', text, flags=re.MULTILINE)  # Remove bullet points
-        
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
-        
-        for line in lines:
-            # Skip explanatory text patterns
-            skip_patterns = [
-                'note:', 'here', 'this', 'you', 'the', 'explanation', 'import', 
-                'modification', 'corrected', 'command', 'alternative', 'approach',
-                'if you', 'can:', 'should', 'would', 'could', 'example:', 'description'
-            ]
-            
-            if any(pattern in line.lower() for pattern in skip_patterns):
-                continue
-                
-            # Skip lines that are clearly not commands
-            if (line.endswith('.') or line.endswith(':') or 
-                len(line) > 200 or len(line.split()) > 25 or
-                line.startswith(('#', '//', '/*', '<!--'))):
-                continue
-            
-            # Look for actual command patterns
-            if line and not line.lower().startswith(('the ', 'this ', 'that ', 'a ', 'an ')):
-                # Clean up any remaining markdown
-                line = re.sub(r'[*_`]', '', line)
-                return line.strip()
-        
-        # If no good line found, try to find git/common commands
-        for line in lines:
-            line_clean = re.sub(r'[*_`]', '', line).strip()
-            if re.match(r'^(git|ls|cd|pwd|mkdir|rm|cp|mv|cat|grep|find|ps|top)\b', line_clean):
-                return line_clean
-        
-        return lines[0] if lines else ""
-    
-    def _detect_language(self, code: str) -> str:
-        """Auto-detect programming language"""
-        code_lower = code.lower()
-        
-        patterns = {
-            "powershell": ['$', 'get-', 'set-', 'new-', 'import-module'],
-            "bash": ['#!/bin/bash', 'echo', 'grep', 'awk', 'sed'],
-            "python": ['import ', 'def ', 'print(', 'if __name__'],
-            "javascript": ['function', 'var ', 'const ', 'let ']
-        }
-        
-        for lang, keywords in patterns.items():
-            if any(keyword in code_lower for keyword in keywords):
-                return lang
-        
-        return self.current_shell
-    
-    def _show_result(self, result: Dict[str, Any], success_msg: str = "Command executed successfully"):
-        """Display command execution result"""
-        if result.get('cancelled'):
-            console.print("[yellow]Execution cancelled[/yellow]")
-        elif result.get('success'):
-            stdout = result.get('stdout', '').strip()
-            if stdout:
-                console.print(Panel(stdout, title="[green]Output[/green]", border_style="green"))
-            else:
-                console.print(f"[green]{success_msg}[/green]")
-        else:
-            error = result.get('stderr') or result.get('error') or "Unknown error"
-            console.print(Panel(error.strip(), title="[red]Error[/red]", border_style="red"))
-            return error.strip()
-        return None
     
     def generate_oneliner(self, task: str, suggested_model: str = None):
         """Generate and execute one-liner command"""
@@ -706,16 +186,17 @@ Requirements:
         with console.status("[yellow]AI generating...", spinner="dots"):
             response = self._chat_with_ai(prompt, model=use_model).strip()
         
-        command = self._extract_clean_command(response)
+        command = self.text_extractor.extract_clean_command(response)
         
         if command:
             self.renderer.render_code_block(command, self.current_shell, f"Generated {self.current_shell.upper()} Command")
             
-            result = self._execute_command(command, self.current_shell)
-            error = self._show_result(result)
-            
-            if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
-                self._troubleshoot_error(command, error, task)
+            if Confirm.ask(f"Execute: [cyan]{command[:100]}{'...' if len(command) > 100 else ''}[/cyan]?"):
+                result = self.command_executor.execute_command(command, self.current_shell)
+                error = self.command_executor.show_result(result)
+                
+                if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
+                    self._troubleshoot_error(command, error, task)
         else:
             console.print("[red]Could not extract valid command from AI response[/red]")
     
@@ -755,12 +236,12 @@ Format your response with clear sections and use code blocks for commands."""
         # Use enhanced Markdown rendering
         self.renderer.render_ai_response(response, "Troubleshooting Analysis", "blue")
         
-        corrected = self._extract_clean_command(response)
+        corrected = self.text_extractor.extract_clean_command(response)
         
-        if corrected:
-            if Confirm.ask("[green]Try corrected command?[/green]"):
-                result = self._execute_command(corrected, self.current_shell)
-                self._show_result(result, "Corrected command successful!")
+        if corrected and Confirm.ask("[green]Try corrected command?[/green]"):
+            if Confirm.ask(f"Execute: [cyan]{corrected}[/cyan]?"):
+                result = self.command_executor.execute_command(corrected, self.current_shell)
+                self.command_executor.show_result(result, "Corrected command successful!")
     
     def run_plugin(self, plugin_name: str):
         """Execute a plugin with optimal model selection"""
@@ -853,32 +334,29 @@ Format your response with clear sections and use code blocks for commands."""
     def _extract_and_execute(self, response: str, plugin_name: str):
         """Extract and execute code from AI response"""
         # Find code blocks
-        code_pattern = r'```(?:(\w+))?\s*(.*?)```'
-        matches = re.findall(code_pattern, response, re.DOTALL | re.IGNORECASE)
+        code_blocks = self.text_extractor.extract_code_blocks(response)
         
         code, language = None, None
         
-        if matches:
-            for lang, extracted in matches:
-                if len(extracted.strip()) > 5:
-                    code, language = extracted.strip(), lang.lower() if lang else None
-                    break
+        if code_blocks:
+            first_block = code_blocks[0]
+            code = first_block['code']
+            language = first_block['language'] or self.text_extractor.detect_language(code)
         
         # Try raw command extraction for command plugins
         if not code and plugin_name in ['cmd_generator', 'quick_command', 'file_operations']:
-            code = self._extract_clean_command(response)
+            code = self.text_extractor.extract_clean_command(response)
             language = self.current_shell
         
         if code:
-            language = language or self._detect_language(code)
-            
             self.renderer.render_code_block(code, language, f"Extracted {language.title()} Code")
             
-            result = self._execute_command(code, language)
-            error = self._show_result(result)
-            
-            if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
-                self._troubleshoot_script_error(code, error, language)
+            if Confirm.ask(f"Execute: [cyan]{code[:100]}{'...' if len(code) > 100 else ''}[/cyan]?"):
+                result = self.command_executor.execute_command(code, language)
+                error = self.command_executor.show_result(result)
+                
+                if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
+                    self._troubleshoot_script_error(code, error, language)
         else:
             console.print("[yellow]No executable code found in response[/yellow]")
     
@@ -925,7 +403,8 @@ Use proper code blocks and clear explanations."""
         # Use enhanced Markdown rendering
         self.renderer.render_ai_response(response, "Script Troubleshooting Analysis", "blue")
         
-        if "```" in response and Confirm.ask("[green]Try corrected script?[/green]"):
+        code_blocks = self.text_extractor.extract_code_blocks(response)
+        if code_blocks and Confirm.ask("[green]Try corrected script?[/green]"):
             self._extract_and_execute(response, "troubleshooter")
     
     def quick_troubleshoot(self, issue: str):
@@ -971,6 +450,53 @@ Use proper formatting with code blocks for commands and clear section headers.""
         # Use enhanced Markdown rendering
         self.renderer.render_ai_response(response, "Troubleshooting Guide", "blue")
     
+    def _handle_unknown_command(self, command: str):
+        """Handle unrecognized commands by passing through to shell"""
+        console.print(f"[yellow]Passing through to {self.current_shell}: {command}[/yellow]")
+        
+        result = self.command_executor.execute_raw_command(command)
+        error = self.command_executor.show_result(result, f"Command '{command}' executed successfully")
+        
+        if error:
+            console.print(f"[red]Command failed: {command}[/red]")
+            if Confirm.ask("[yellow]Would you like AI to analyze and suggest a fix?[/yellow]"):
+                self._troubleshoot_passthrough_error(command, error)
+    
+    def _troubleshoot_passthrough_error(self, command: str, error: str):
+        """Troubleshoot failed passthrough commands"""
+        prompt = f"""A {self.current_shell} command failed. Analyze the error and provide a corrected command.
+
+**Failed Command:** {command}
+**Error:** {error}
+**Shell:** {self.current_shell}
+**Platform:** {self.platform}
+
+Provide:
+1. Brief explanation of what went wrong
+2. Corrected command that should work
+3. Alternative approaches if applicable
+
+Format your response with clear sections and code blocks for any commands."""
+        
+        console.print(Panel("🔍 AI analyzing failed command...", 
+                          title="[yellow]Command Troubleshooting[/yellow]", border_style="yellow"))
+        
+        with console.status("[yellow]AI troubleshooting...", spinner="dots"):
+            response = self._chat_with_ai(prompt)
+        
+        # Use enhanced Markdown rendering
+        self.renderer.render_ai_response(response, "AI Analysis & Fix", "blue")
+        
+        # Try to extract a corrected command
+        corrected = self.text_extractor.extract_clean_command(response)
+        if corrected and corrected != command:
+            self.renderer.render_code_block(corrected, self.current_shell, "Suggested Fix")
+            
+            if Confirm.ask("[green]Try the suggested fix?[/green]"):
+                if Confirm.ask(f"Execute: [cyan]{corrected}[/cyan]?"):
+                    result = self.command_executor.execute_command(corrected, self.current_shell)
+                    self.command_executor.show_result(result, "Fixed command executed successfully!")
+    
     def show_plugins(self, category: str = None):
         """Display available plugins, optionally filtered by category"""
         if category:
@@ -982,12 +508,14 @@ Use proper formatting with code blocks for commands and clear section headers.""
                 return
             
             plugin_list = plugins_by_category[category]
-            table = Table(title=f"Plugins - {category.title()} Category")
+            table_title = f"Plugins - {category.title()} Category"
         else:
             # Show all plugins
             plugin_list = self.plugin_manager.list_plugins()
-            table = Table(title="Available Plugins")
+            table_title = "Available Plugins"
         
+        from rich.table import Table
+        table = Table(title=table_title)
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Category", style="magenta")
         table.add_column("Description", style="green")
@@ -1062,6 +590,7 @@ Use proper formatting with code blocks for commands and clear section headers.""
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
         
+        from rich.table import Table
         table = Table(title="System Status")
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="magenta") 
@@ -1303,6 +832,8 @@ Type **`help`** for all commands or **`models`** to see AI model options.
                 elif cmd_main in ['troubleshoot', 'fix']:
                     issue = ' '.join(cmd_args) if cmd_args else Prompt.ask("Describe issue")
                     self.quick_troubleshoot(issue)
+                elif cmd_main == 'debug':
+                    self._debug_plugins()
                 else:
                     # Unknown command - try passing through to shell
                     console.print(f"[yellow]Unknown fabric command. Trying as {self.current_shell} command...[/yellow]")
@@ -1312,13 +843,52 @@ Type **`help`** for all commands or **`models`** to see AI model options.
                 console.print("\n[yellow]Use 'quit' to exit[/yellow]")
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
-
-def main():
-    """Entry point"""
-    try:
-        AIFabricShell().run()
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Goodbye![/yellow]")
-
-if __name__ == "__main__":
-    main()
+    
+    def _debug_plugins(self):
+        """Debug plugin loading and display issues"""
+        debug_info = self.plugin_manager.debug_info()
+        
+        console.print("[cyan]Plugin Debug Information[/cyan]")
+        console.print(f"Plugins directory: {debug_info['plugins_dir']}")
+        console.print(f"Directory exists: {debug_info['plugins_dir_exists']}")
+        console.print(f"YAML files found: {debug_info['yaml_files']}")
+        console.print(f"Loaded plugins: {debug_info['loaded_plugins']}")
+        console.print(f"Plugin count: {debug_info['plugin_count']}")
+        
+        console.print("\n[yellow]Plugin data structure:[/yellow]")
+        for name, keys in debug_info['plugins_data'].items():
+            console.print(f"  {name}: {keys}")
+        
+        # Test the list method
+        plugin_list = self.plugin_manager.list_plugins()
+        console.print(f"\nlist_plugins() returns: {plugin_list}")
+        
+        # Test each plugin's info
+        console.print("\n[yellow]Plugin info test:[/yellow]")
+        for name in plugin_list:
+            info = self.plugin_manager.get_plugin_info(name)
+            console.print(f"  {name}: {info}")
+        
+        # Test categories
+        categories = self.plugin_manager.get_plugins_by_category()
+        console.print(f"\nCategories: {categories}")
+        
+        # Try to manually create a table
+        if plugin_list:
+            console.print("\n[green]Manually creating table...[/green]")
+            from rich.table import Table
+            table = Table(title="Debug Table")
+            table.add_column("Name", style="cyan")
+            table.add_column("Category", style="magenta")
+            table.add_column("Description", style="green")
+            
+            for name in plugin_list:
+                info = self.plugin_manager.get_plugin_info(name)
+                table.add_row(
+                    name,
+                    info.get('category', 'N/A'),
+                    info.get('description', 'N/A')
+                )
+            console.print(table)
+        else:
+            console.print("[red]No plugins to display in table[/red]")

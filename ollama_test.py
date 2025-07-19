@@ -11,6 +11,21 @@ from rich.panel import Panel
 console = Console()
 
 def test_ollama():
+    """
+    Test the connection to Ollama and the availability of models.
+
+    This function performs the following steps:
+    1. Tests the basic connection to Ollama and retrieves the list of models.
+    2. Parses the response to identify available models and prints them.
+    3. Attempts to use the first available model to test chat functionality.
+    
+    Returns:
+        bool: True if all tests pass, False otherwise.
+    
+    Raises:
+        Exception: If there is an error during connection or chat testing.
+    """
+
     console.print(Panel("Ollama Connection Test", style="bold blue"))
     
     try:
