@@ -5,11 +5,14 @@ AI Fabric Shell - Local AI automation with Rich UI and plugin system
 
 import os
 import sys
-import json
 import yaml
 import ollama
 import subprocess
 import platform
+import psutil
+import re
+import glob
+import shutil
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from rich.console import Console
@@ -17,15 +20,183 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
-from rich.live import Live
 from rich.columns import Columns
-from rich.tree import Tree
-from rich.progress import Progress, SpinnerColumn, TextColumn
-import psutil
-import time
-import re
 
 console = Console()
+
+class SystemInfo:
+    """Detect and provide system information for AI context"""
+    
+    def __init__(self):
+        self.os_name = platform.system()
+        self.os_version = platform.version()
+        self.architecture = platform.machine()
+        self.python_version = platform.python_version()
+        self.available_tools = self._detect_tools()
+        
+    def _detect_tools(self) -> Dict[str, bool]:
+        """Detect available command-line tools"""
+        tools = {
+            'git': shutil.which('git') is not None,
+            'docker': shutil.which('docker') is not None,
+            'python': shutil.which('python') is not None,
+            'node': shutil.which('node') is not None,
+            'npm': shutil.which('npm') is not None,
+            'curl': shutil.which('curl') is not None,
+            'wget': shutil.which('wget') is not None,
+            'ssh': shutil.which('ssh') is not None,
+        }
+        
+        # Windows specific
+        if self.os_name == 'Windows':
+            tools.update({
+                'powershell': shutil.which('powershell') is not None,
+                'cmd': True,  # cmd is always available on Windows
+                'wsl': shutil.which('wsl') is not None,
+            })
+        
+        return tools
+    
+    def get_context_string(self) -> str:
+        """Generate context string for AI interactions"""
+        available_tools = [tool for tool, available in self.available_tools.items() if available]
+        
+        context = f"""System Context:
+- OS: {self.os_name} {self.os_version}
+- Architecture: {self.architecture}
+- Python: {self.python_version}
+- Available tools: {', '.join(available_tools)}"""
+        
+        if self.os_name == 'Windows':
+            context += f"\n- Running in Windows environment with PowerShell/CMD support"
+        elif self.os_name == 'Darwin':
+            context += f"\n- Running on macOS with standard Unix utilities"
+        else:
+            context += f"\n- Running on Linux/Unix with standard shell utilities"
+            
+        return context
+
+class WindowsCompleter:
+    """Windows-specific tab completion using PSReadLine-like behavior"""
+    
+    def __init__(self, shell_instance):
+        self.shell = shell_instance
+        self.commands = ['list', 'ls', 'run', 'cmd', 'status', 'chat', 'troubleshoot', 'fix', 'help', 'h', 'quit', 'exit', 'q']
+        
+    def get_suggestions(self, partial_input: str) -> List[str]:
+        """Get completion suggestions for Windows"""
+        if not partial_input:
+            return self.commands[:5]
+            
+        words = partial_input.split()
+        
+        # Main commands
+        if len(words) == 1 and not partial_input.endswith(' '):
+            matches = [cmd for cmd in self.commands if cmd.startswith(partial_input.lower())]
+            return matches
+        
+        # Plugin completion for 'run'
+        if partial_input.startswith('run '):
+            plugin_part = partial_input[4:]
+            if not partial_input.endswith(' '):
+                plugins = [f"run {name}" for name in self.shell.plugin_manager.list_plugins() 
+                          if name.startswith(plugin_part)]
+                return plugins
+        
+        # Path completion
+        return self._complete_paths(partial_input)
+    
+    def _complete_paths(self, text: str) -> List[str]:
+        """Complete file paths on Windows"""
+        try:
+            # Handle different cases
+            if '\\' in text or '/' in text:
+                # Has path separators
+                parts = text.replace('/', '\\').split('\\')
+                if len(parts) > 1:
+                    directory = '\\'.join(parts[:-1])
+                    filename = parts[-1]
+                else:
+                    directory = '.'
+                    filename = text
+            else:
+                directory = '.'
+                filename = text
+            
+            if not os.path.exists(directory):
+                return []
+            
+            matches = []
+            for item in os.listdir(directory):
+                if item.lower().startswith(filename.lower()):
+                    full_path = os.path.join(directory, item)
+                    if os.path.isdir(full_path):
+                        matches.append(f"{text[:len(text)-len(filename)]}{item}\\")
+                    else:
+                        matches.append(f"{text[:len(text)-len(filename)]}{item}")
+            
+            return sorted(matches)[:8]
+            
+        except (OSError, PermissionError):
+            return []
+
+class CrossPlatformPrompt:
+    """Cross-platform prompt with OS-specific completion"""
+    
+    def __init__(self, shell_instance):
+        self.shell = shell_instance
+        self.is_windows = platform.system() == 'Windows'
+        
+        if self.is_windows:
+            self.completer = WindowsCompleter(shell_instance)
+        else:
+            self.completer = AutoCompleter(shell_instance)
+    
+    def ask_with_completion(self, prompt_text: str) -> str:
+        """Ask for input with platform-appropriate completion"""
+        if self.is_windows:
+            return self._windows_prompt(prompt_text)
+        else:
+            return self._unix_prompt(prompt_text)
+    
+    def _windows_prompt(self, prompt_text: str) -> str:
+        """Windows-specific prompt with manual completion"""
+        console.print(f"[bold cyan]{prompt_text}[/bold cyan]", end=" ")
+        
+        try:
+            user_input = input().strip()
+            
+            # Show suggestions if input looks incomplete
+            if user_input and len(user_input.split()) <= 2:
+                suggestions = self.completer.get_suggestions(user_input)
+                if suggestions and len(suggestions) > 1:
+                    console.print(f"[dim]💡 Suggestions: {', '.join(suggestions[:5])}[/dim]")
+            
+            return user_input
+            
+        except (EOFError, KeyboardInterrupt):
+            return ""
+    
+    def _unix_prompt(self, prompt_text: str) -> str:
+        """Unix-specific prompt with readline"""
+        try:
+            import readline
+            
+            def complete(text, state):
+                try:
+                    line = readline.get_line_buffer()
+                    completions = self.completer.get_completions(text, line)
+                    return completions[state] if state < len(completions) else None
+                except Exception:
+                    return None
+            
+            readline.set_completer(complete)
+            readline.parse_and_bind("tab: complete")
+            
+            return Prompt.ask(prompt_text)
+            
+        except ImportError:
+            return Prompt.ask(prompt_text)
 
 class PluginManager:
     """Manages loading and execution of AI automation plugins"""
@@ -34,36 +205,28 @@ class PluginManager:
         self.plugins_dir = Path(plugins_dir)
         self.plugins_dir.mkdir(exist_ok=True)
         self.plugins = {}
-        self.load_plugins()
+        self._load_plugins()
     
-    def load_plugins(self):
+    def _load_plugins(self):
         """Load all YAML plugin files"""
-        plugin_files = list(self.plugins_dir.glob("*.yaml")) + list(self.plugins_dir.glob("*.yml"))
-        
-        for plugin_file in plugin_files:
+        for plugin_file in self.plugins_dir.glob("*.y*ml"):
             try:
                 with open(plugin_file, 'r') as f:
-                    plugin_data = yaml.safe_load(f)
-                    plugin_name = plugin_file.stem
-                    self.plugins[plugin_name] = plugin_data
-                    console.print(f"[green]✓[/green] Loaded plugin: {plugin_name}")
+                    self.plugins[plugin_file.stem] = yaml.safe_load(f)
+                console.print(f"[green]✓[/green] Loaded plugin: {plugin_file.stem}")
             except Exception as e:
                 console.print(f"[red]✗[/red] Failed to load {plugin_file}: {e}")
     
     def get_plugin(self, name: str) -> Optional[Dict[str, Any]]:
-        """Get a plugin by name"""
         return self.plugins.get(name)
     
     def list_plugins(self) -> List[str]:
-        """List all available plugins"""
         return list(self.plugins.keys())
     
     def get_plugin_info(self, name: str) -> Dict[str, Any]:
-        """Get plugin information"""
         plugin = self.get_plugin(name)
         if not plugin:
             return {}
-        
         return {
             'name': name,
             'description': plugin.get('description', 'No description'),
@@ -77,205 +240,122 @@ class AIFabricShell:
     
     def __init__(self, model: str = "llama3.1"):
         self.model = model
+        self.system_info = SystemInfo()
         self.plugin_manager = PluginManager()
-        self.console = console
-        self.history = []
-        
-        # Detect current shell and platform
-        self.current_shell = self.detect_current_shell()
         self.platform = platform.system().lower()
-        
-        # Test Ollama connection
-        self.test_ollama_connection()
+        self.current_shell = self._detect_shell()
+        self.prompt_handler = CrossPlatformPrompt(self)
+        self._test_ollama()
     
-    def detect_current_shell(self) -> str:
+    def _detect_shell(self) -> str:
         """Detect the current shell being used"""
-        if platform.system().lower() == "windows":
-            # Check if running in PowerShell
-            if os.environ.get('PSModulePath'):
-                return "powershell"
-            else:
-                return "cmd"
-        else:
-            # Unix-like systems
-            shell = os.environ.get('SHELL', '/bin/bash')
-            if 'zsh' in shell:
-                return "zsh"
-            elif 'fish' in shell:
-                return "fish"
-            elif 'bash' in shell:
-                return "bash"
-            else:
-                return "bash"  # Default fallback
+        if self.platform == "windows":
+            return "powershell" if os.environ.get('PSModulePath') else "cmd"
+        
+        shell = os.environ.get('SHELL', '/bin/bash')
+        for shell_type in ['zsh', 'fish', 'bash']:
+            if shell_type in shell:
+                return shell_type
+        return "bash"
     
-    def test_ollama_connection(self):
-        """Test if Ollama is running and accessible"""
+    def _extract_models(self, models_response) -> List[str]:
+        """Extract model names from various response formats"""
+        if isinstance(models_response, dict):
+            models_list = models_response.get('models', [])
+        elif hasattr(models_response, 'models'):
+            models_list = models_response.models
+        else:
+            models_list = models_response
+        
+        models = []
+        for model in models_list:
+            if hasattr(model, 'model'):
+                models.append(model.model)
+            elif isinstance(model, dict):
+                name = model.get('name') or model.get('model') or model.get('id')
+                if name:
+                    models.append(name)
+            elif isinstance(model, str):
+                models.append(model)
+        return models
+    
+    def _test_ollama(self):
+        """Test Ollama connection and model availability"""
         try:
-            # Test basic connection first
             models_response = ollama.list()
-            
-            # Handle different response formats
-            if isinstance(models_response, dict):
-                models_list = models_response.get('models', [])
-            else:
-                # Handle case where response has a 'models' attribute
-                if hasattr(models_response, 'models'):
-                    models_list = models_response.models
-                else:
-                    models_list = models_response
-            
-            # Extract model names safely
-            available_models = []
-            for model in models_list:
-                if hasattr(model, 'model'):
-                    # Model object with .model attribute (newer Ollama versions)
-                    model_name = model.model
-                    available_models.append(model_name)
-                elif isinstance(model, dict):
-                    # Dictionary format
-                    model_name = model.get('name') or model.get('model') or model.get('id')
-                    if model_name:
-                        available_models.append(model_name)
-                elif isinstance(model, str):
-                    # String format
-                    available_models.append(model)
+            available_models = self._extract_models(models_response)
             
             if not available_models:
-                console.print("[red]No models available. Please install a model first.[/red]")
-                console.print("Example commands:")
-                console.print("  ollama pull llama3.1")
-                console.print("  ollama pull codellama")
-                console.print("  ollama pull mistral")
+                console.print("[red]No models available. Install with: ollama pull llama3.1[/red]")
                 sys.exit(1)
             
-            # Check if our default model exists (exact match or partial match)
-            model_exists = any(self.model in model for model in available_models)
+            # Check if default model exists
+            if not any(self.model in model for model in available_models):
+                console.print(f"[yellow]Model '{self.model}' not found.[/yellow]")
+                console.print(f"Available: {', '.join(available_models)}")
+                self.model = Prompt.ask("Select a model", choices=available_models, default=available_models[0])
             
-            if not model_exists:
-                console.print(f"[yellow]Warning: Model '{self.model}' not found.[/yellow]")
-                console.print(f"Available models: {', '.join(available_models)}")
-                
-                # Try to find a suitable default
-                suitable_models = [m for m in available_models if any(name in m.lower() for name in ['llama', 'mistral', 'codellama', 'gemma'])]
-                
-                if suitable_models:
-                    new_model = Prompt.ask("Select a model", choices=available_models, default=suitable_models[0])
-                else:
-                    new_model = Prompt.ask("Select a model", choices=available_models, default=available_models[0])
-                
-                self.model = new_model
-            
-            # Test actual chat functionality
-            try:
-                test_response = ollama.chat(model=self.model, messages=[{
-                    'role': 'user',
-                    'content': 'Hello, respond with just "OK" to test connection.'
-                }])
-                
-                if test_response and 'message' in test_response:
-                    console.print(f"[green]✓[/green] Connected to Ollama (model: {self.model})")
-                else:
-                    console.print("[yellow]Warning: Unexpected response format from Ollama[/yellow]")
-                    console.print(f"[green]✓[/green] Connected to Ollama (model: {self.model})")
-                    
-            except Exception as chat_error:
-                console.print(f"[red]✗[/red] Chat test failed: {chat_error}")
-                console.print("Try pulling a different model or check Ollama status")
-                sys.exit(1)
+            # Test chat functionality
+            ollama.chat(model=self.model, messages=[{'role': 'user', 'content': 'test'}])
+            console.print(f"[green]✓[/green] Connected to Ollama (model: {self.model})")
             
         except Exception as e:
-            console.print(f"[red]✗[/red] Cannot connect to Ollama: {e}")
-            console.print("\nTroubleshooting steps:")
-            console.print("1. Make sure Ollama is installed: https://ollama.ai")
-            console.print("2. Start Ollama service: ollama serve")
-            console.print("3. Pull a model: ollama pull llama3.1")
-            console.print("4. Test manually: ollama run llama3.1 'hello'")
+            console.print(f"[red]✗[/red] Ollama connection failed: {e}")
+            console.print("Troubleshooting:")
+            console.print("1. Install Ollama: https://ollama.ai")
+            console.print("2. Start service: ollama serve") 
+            console.print("3. Pull model: ollama pull llama3.1")
             sys.exit(1)
     
-    def chat_with_ai(self, prompt: str, context: str = "") -> str:
-        """Send a prompt to the AI model"""
-        full_prompt = f"{context}\n\n{prompt}" if context else prompt
+    def _chat_with_ai(self, prompt: str, context: str = "") -> str:
+        """Send prompt to AI with system context and handle response formats"""
+        # Add system context to all AI interactions
+        system_context = self.system_info.get_context_string()
+        full_context = f"{system_context}\n\n{context}" if context else system_context
+        full_prompt = f"{full_context}\n\n{prompt}" if full_context else prompt
         
         try:
             response = ollama.chat(model=self.model, messages=[{
-                'role': 'user',
-                'content': full_prompt
+                'role': 'user', 'content': full_prompt
             }])
             
-            # Handle different response formats
+            # Handle various response formats
             if isinstance(response, dict):
-                if 'message' in response and 'content' in response['message']:
-                    return response['message']['content']
-                elif 'response' in response:
-                    return response['response']
-                elif 'content' in response:
-                    return response['content']
-            elif isinstance(response, str):
-                return response
+                return (response.get('message', {}).get('content') or 
+                       response.get('response') or response.get('content') or str(response))
             elif hasattr(response, 'message') and hasattr(response.message, 'content'):
-                # Handle response objects with message.content attribute
                 return response.message.content
-            
-            return f"Unexpected response format: {response}"
+            return str(response)
             
         except Exception as e:
-            return f"Error communicating with AI: {e}"
+            return f"AI communication error: {e}"
     
-    def execute_command(self, command: str, language: str = None, confirm: bool = True) -> Dict[str, Any]:
-        """Execute a shell command with optional confirmation"""
-        # Use detected shell if no language specified
-        if not language:
-            language = self.current_shell
-            
-        if confirm:
-            if not Confirm.ask(f"Execute: [bold cyan]{command[:100]}{'...' if len(command) > 100 else ''}[/bold cyan]?"):
-                return {'cancelled': True}
+    def _execute_command(self, command: str, language: str = None, confirm: bool = True) -> Dict[str, Any]:
+        """Execute shell command with confirmation"""
+        language = language or self.current_shell
+        
+        if confirm and not Confirm.ask(f"Execute: [cyan]{command[:100]}{'...' if len(command) > 100 else ''}[/cyan]?"):
+            return {'cancelled': True}
         
         try:
-            with console.status("[bold yellow]Executing...", spinner="dots"):
-                # Determine how to execute based on language
-                if language.lower() == "powershell":
-                    # Execute PowerShell script
-                    result = subprocess.run(
-                        ["powershell", "-Command", command],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        encoding='utf-8',
-                        errors='replace'
-                    )
-                elif language.lower() == "python":
-                    # Execute Python script
-                    result = subprocess.run(
-                        ["python", "-c", command],
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        encoding='utf-8',
-                        errors='replace'
-                    )
-                elif language.lower() == "cmd":
-                    # Execute CMD command
-                    result = subprocess.run(
-                        command,
-                        shell=True,
-                        capture_output=True,
-                        text=True,
-                        timeout=30,
-                        encoding='utf-8',
-                        errors='replace'
-                    )
+            with console.status("[yellow]Executing...", spinner="dots"):
+                # Build command based on shell type
+                if language == "powershell":
+                    cmd = ["powershell", "-Command", command]
+                elif language == "python":
+                    cmd = ["python", "-c", command]
                 else:
-                    # Default to shell execution (bash/zsh/fish)
-                    result = subprocess.run(
-                        command, 
-                        shell=True, 
-                        capture_output=True, 
-                        text=True,
-                        timeout=30,
-                        encoding='utf-8',
-                        errors='replace'
-                    )
+                    cmd = command
+                
+                result = subprocess.run(
+                    cmd,
+                    shell=(language not in ["powershell", "python"]),
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    encoding='utf-8',
+                    errors='replace'
+                )
             
             return {
                 'success': result.returncode == 0,
@@ -288,549 +368,475 @@ class AIFabricShell:
         except Exception as e:
             return {'error': str(e)}
     
-    def extract_and_execute_script(self, ai_response: str, plugin_name: str):
-        """Extract script from AI response and offer to execute it"""
-        
-        extracted_code = None
-        detected_language = None
-        
-        # First, try to find markdown code blocks
-        code_block_pattern = r'```(?:(\w+))?\s*(.*?)```'
-        matches = re.findall(code_block_pattern, ai_response, re.DOTALL | re.IGNORECASE)
-        
-        if matches:
-            for lang, code in matches:
-                code = code.strip()
-                if len(code) > 5:  # Must be substantial
-                    extracted_code = code
-                    detected_language = lang.lower() if lang else None
-                    break
-        
-        # If no code blocks, try to extract raw commands for command generator plugins
-        if not extracted_code and plugin_name in ['cmd_generator', 'quick_command', 'file_operations']:
-            extracted_code = self.extract_clean_command(ai_response)
-            if extracted_code:
-                detected_language = self.current_shell
-        
-        if extracted_code:
-            # Auto-detect language if not specified
-            if not detected_language:
-                detected_language = self.detect_language(extracted_code)
+    def _execute_raw_command(self, command: str) -> Dict[str, Any]:
+        """Execute raw command without confirmation (for passthrough)"""
+        try:
+            with console.status(f"[yellow]Executing: {command[:50]}...[/yellow]", spinner="dots"):
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    encoding='utf-8',
+                    errors='replace'
+                )
             
-            console.print(Panel(
-                Syntax(extracted_code, detected_language, theme="monokai", line_numbers=True),
-                title=f"[bold]Extracted {detected_language.title()} Command[/bold]",
-                border_style="yellow"
-            ))
-            
-            result = self.execute_command(extracted_code, detected_language)
-            
-            if result.get('cancelled'):
-                console.print("[yellow]Execution cancelled[/yellow]")
-            elif result.get('success'):
-                stdout = result.get('stdout', '').strip()
-                if stdout:
-                    console.print(Panel(
-                        stdout,
-                        title="[green]Command Output[/green]",
-                        border_style="green"
-                    ))
-                else:
-                    console.print("[green]Command executed successfully (no output)[/green]")
-            else:
-                error_msg = (result.get('stderr') or result.get('error') or "Unknown error").strip()
-                console.print(Panel(
-                    error_msg,
-                    title="[red]Command Failed[/red]",
-                    border_style="red"
-                ))
-                
-                if Confirm.ask("[yellow]Would you like AI to analyze this error and suggest a fix?[/yellow]"):
-                    self.troubleshoot_command_error(extracted_code, error_msg, "command execution")
-        else:
-            console.print("[yellow]No executable commands found in AI response[/yellow]")
+            return {
+                'success': result.returncode == 0,
+                'stdout': result.stdout,
+                'stderr': result.stderr,
+                'returncode': result.returncode,
+                'command': command
+            }
+        except subprocess.TimeoutExpired:
+            return {'error': 'Command timed out', 'command': command}
+        except Exception as e:
+            return {'error': str(e), 'command': command}
     
-    def detect_language(self, code: str) -> str:
-        """Detect the programming language of code"""
-        code_lower = code.lower()
+    def _handle_unknown_command(self, command: str):
+        """Handle unrecognized commands by passing through to shell"""
+        console.print(f"[yellow]Passing through to {self.current_shell}: {command}[/yellow]")
         
-        if any(keyword in code_lower for keyword in ['$', 'get-', 'set-', 'new-', 'import-module']):
-            return "powershell"
-        elif any(keyword in code_lower for keyword in ['#!/bin/bash', 'echo', 'grep', 'awk', 'sed']):
-            return "bash"
-        elif any(keyword in code_lower for keyword in ['import ', 'def ', 'print(', 'if __name__']):
-            return "python"
-        elif any(keyword in code_lower for keyword in ['function', 'var ', 'const ', 'let ']):
-            return "javascript"
-        else:
-            return self.current_shell
+        result = self._execute_raw_command(command)
+        error = self._show_result(result, f"Command '{command}' executed successfully")
+        
+        if error:
+            console.print(f"[red]Command failed: {command}[/red]")
+            if Confirm.ask("[yellow]Would you like AI to analyze and suggest a fix?[/yellow]"):
+                self._troubleshoot_passthrough_error(command, error)
     
-    def generate_oneliner(self, task_description: str):
-        """Generate and execute a one-liner command"""
+    def _troubleshoot_passthrough_error(self, command: str, error: str):
+        """Troubleshoot failed passthrough commands"""
+        prompt = f"""A {self.current_shell} command failed. Analyze the error and provide a corrected command.
+
+**Failed Command:** {command}
+**Error:** {error}
+**Shell:** {self.current_shell}
+**Platform:** {self.platform}
+
+Provide:
+1. Brief explanation of what went wrong
+2. Corrected command that should work
+3. Alternative approaches if applicable
+
+Format: Explanation first, then the corrected command clearly marked."""
         
-        # Create a context-aware prompt based on current shell
-        shell_context = {
-            "powershell": "PowerShell cmdlets and syntax",
-            "bash": "bash commands and Unix utilities", 
-            "zsh": "zsh commands and Unix utilities",
-            "fish": "fish shell commands and Unix utilities",
-            "cmd": "Windows Command Prompt commands"
-        }
+        console.print(Panel("🔍 AI analyzing failed command...", 
+                          title="[yellow]Command Troubleshooting[/yellow]", border_style="yellow"))
         
-        context = shell_context.get(self.current_shell, "shell commands")
+        with console.status("[yellow]AI troubleshooting...", spinner="dots"):
+            response = self._chat_with_ai(prompt)
         
-        oneliner_prompt = f"""
-        Generate a single-line {context} command to: {task_description}
+        console.print(Panel(response, title="[blue]AI Analysis & Fix[/blue]", border_style="blue"))
         
-        Requirements:
-        - Must be a single line command
-        - Use {self.current_shell} syntax
-        - Be production-ready and safe to execute
-        
-        Respond with ONLY the command. No explanation, no markdown, no backticks.
-        """
-        
-        console.print(Panel(
-            f"Generating {self.current_shell.upper()} one-liner for: {task_description}",
-            title="[bold cyan]Command Generator[/bold cyan]",
-            border_style="cyan"
-        ))
-        
-        with console.status("[bold yellow]AI generating command...", spinner="dots"):
-            response = self.chat_with_ai(oneliner_prompt).strip()
-        
-        # Extract clean command
-        command = self.extract_clean_command(response)
-        
-        if command:
-            # Show the generated command
-            console.print(Panel(
-                Syntax(command, self.current_shell, theme="monokai"),
-                title=f"[bold]Generated {self.current_shell.upper()} Command[/bold]",
-                border_style="green"
-            ))
+        # Try to extract a corrected command
+        corrected = self._extract_clean_command(response)
+        if corrected and corrected != command:
+            console.print(Panel(Syntax(corrected, self.current_shell, theme="monokai"),
+                              title="[green]Suggested Fix[/green]", border_style="green"))
             
-            # Execute the command
-            result = self.execute_command(command, self.current_shell)
-            
-            if result.get('cancelled'):
-                console.print("[yellow]Execution cancelled[/yellow]")
-            elif result.get('success'):
-                if result.get('stdout'):
-                    # Clean and format the output
-                    output = result['stdout'].strip()
-                    if output:
-                        console.print(Panel(
-                            output,
-                            title="[green]Command Output[/green]",
-                            border_style="green"
-                        ))
-                    else:
-                        console.print("[green]Command executed successfully (no output)[/green]")
-                else:
-                    console.print("[green]Command executed successfully (no output)[/green]")
-            else:
-                # Command failed - show error and offer troubleshooting
-                error_msg = result.get('stderr') or result.get('error') or "Unknown error"
-                error_msg = error_msg.strip()
-                
-                console.print(Panel(
-                    error_msg,
-                    title="[red]Command Failed[/red]",
-                    border_style="red"
-                ))
-                
-                # Offer automatic troubleshooting
-                if Confirm.ask("[yellow]Would you like AI to analyze this error and suggest a fix?[/yellow]"):
-                    self.troubleshoot_command_error(command, error_msg, task_description)
-        else:
-            console.print("[red]Could not extract a valid command from AI response[/red]")
+            if Confirm.ask("[green]Try the suggested fix?[/green]"):
+                result = self._execute_command(corrected, self.current_shell)
+                self._show_result(result, "Fixed command executed successfully!")
     
-    def troubleshoot_command_error(self, command: str, error_message: str, original_task: str):
-        """Troubleshoot a failed one-liner command"""
-        
-        troubleshoot_prompt = f"""
-        A {self.current_shell} command failed. Please provide ONLY a corrected command.
-        
-        **Original Task:** {original_task}
-        **Failed Command:** {command}
-        **Error:** {error_message}
-        **Shell:** {self.current_shell}
-        **Platform:** {self.platform}
-        
-        Respond with ONLY the corrected command. No explanation, no notes, no markdown - just the command.
-        """
-        
-        console.print(Panel(
-            "🔍 AI is analyzing the command error...",
-            title="[bold yellow]Command Troubleshooting[/bold yellow]",
-            border_style="yellow"
-        ))
-        
-        with console.status("[bold yellow]AI troubleshooting...", spinner="dots"):
-            response = self.chat_with_ai(troubleshoot_prompt).strip()
-        
-        # Clean up the response more aggressively
-        corrected_command = self.extract_clean_command(response)
-        
-        if corrected_command:
-            console.print(Panel(
-                Syntax(corrected_command, self.current_shell, theme="monokai"),
-                title="[bold blue]Corrected Command[/bold blue]",
-                border_style="blue"
-            ))
-            
-            if Confirm.ask("[green]Would you like to try the corrected command?[/green]"):
-                result = self.execute_command(corrected_command, self.current_shell)
-                
-                if result.get('cancelled'):
-                    console.print("[yellow]Execution cancelled[/yellow]")
-                elif result.get('success'):
-                    if result.get('stdout'):
-                        console.print(Panel(
-                            result['stdout'],
-                            title="[green]Output[/green]",
-                            border_style="green"
-                        ))
-                    else:
-                        console.print("[green]Corrected command executed successfully![/green]")
-                else:
-                    error_msg = result.get('stderr') or result.get('error') or "Unknown error"
-                    console.print(Panel(
-                        error_msg,
-                        title="[red]Corrected Command Also Failed[/red]",
-                        border_style="red"
-                    ))
-        else:
-            console.print("[red]Could not extract a clean command from AI response[/red]")
-    
-    def extract_clean_command(self, text: str) -> str:
-        """Extract a clean command from potentially messy AI response"""
-        
-        # Remove markdown code blocks
+    def _extract_clean_command(self, text: str) -> str:
+        """Extract clean command from AI response"""
+        # Remove markdown and backticks more aggressively
         text = re.sub(r'```[\w]*\s*', '', text)
         text = re.sub(r'```', '', text)
-        
-        # Remove backticks
         text = text.replace('`', '')
         
-        # Split into lines and find the best command line
+        # Remove common AI response patterns
+        text = re.sub(r'\*\*[^*]+\*\*', '', text)  # Remove **bold** text
+        text = re.sub(r'^\s*[\*\-]\s*', '', text, flags=re.MULTILINE)  # Remove bullet points
+        
         lines = [line.strip() for line in text.split('\n') if line.strip()]
         
         for line in lines:
-            # Skip obvious explanatory text
-            if any(skip in line.lower() for skip in [
-                'note:', 'here', 'this', 'you', 'the', 'explanation',
-                'import', 'modification', 'profile', 'relevant',
-                'didn\'t include', 'not include'
-            ]):
+            # Skip explanatory text patterns
+            skip_patterns = [
+                'note:', 'here', 'this', 'you', 'the', 'explanation', 'import', 
+                'modification', 'corrected', 'command', 'alternative', 'approach',
+                'if you', 'can:', 'should', 'would', 'could', 'example:', 'description'
+            ]
+            
+            if any(pattern in line.lower() for pattern in skip_patterns):
+                continue
+                
+            # Skip lines that are clearly not commands
+            if (line.endswith('.') or line.endswith(':') or 
+                len(line) > 200 or len(line.split()) > 25 or
+                line.startswith(('#', '//', '/*', '<!--'))):
                 continue
             
-            # Skip lines that end with periods (explanatory sentences)
-            if line.endswith('.'):
-                continue
-            
-            # Skip lines that are too long to be commands (likely explanations)
-            if len(line) > 200:
-                continue
-            
-            # If we find a line that looks like a command, return it
-            if line and len(line.split()) <= 20:  # Reasonable command length
-                return line
+            # Look for actual command patterns
+            if line and not line.lower().startswith(('the ', 'this ', 'that ', 'a ', 'an ')):
+                # Clean up any remaining markdown
+                line = re.sub(r'[*_`]', '', line)
+                return line.strip()
         
-        # If no good line found, return the first non-empty line
+        # If no good line found, try to find git/common commands
+        for line in lines:
+            line_clean = re.sub(r'[*_`]', '', line).strip()
+            if re.match(r'^(git|ls|cd|pwd|mkdir|rm|cp|mv|cat|grep|find|ps|top)\b', line_clean):
+                return line_clean
+        
         return lines[0] if lines else ""
     
-    def troubleshoot_script_error(self, script_code: str, error_message: str, language: str):
-        """Use AI to troubleshoot script execution errors"""
+    def _detect_language(self, code: str) -> str:
+        """Auto-detect programming language"""
+        code_lower = code.lower()
         
-        troubleshoot_prompt = f"""
-        I have a {language} script that failed to execute. Please analyze the error and provide:
-        1. Root cause analysis of the error
-        2. Specific fixes for the script
-        3. Corrected version of the script
-        4. Alternative approaches if needed
+        patterns = {
+            "powershell": ['$', 'get-', 'set-', 'new-', 'import-module'],
+            "bash": ['#!/bin/bash', 'echo', 'grep', 'awk', 'sed'],
+            "python": ['import ', 'def ', 'print(', 'if __name__'],
+            "javascript": ['function', 'var ', 'const ', 'let ']
+        }
         
-        **Original Script:**
-        ```{language}
-        {script_code}
-        ```
+        for lang, keywords in patterns.items():
+            if any(keyword in code_lower for keyword in keywords):
+                return lang
         
-        **Error Message:**
-        {error_message}
-        
-        Please provide a corrected script that addresses these issues.
-        """
-        
-        console.print(Panel(
-            "🔍 AI is analyzing the error...",
-            title="[bold yellow]Troubleshooting[/bold yellow]",
-            border_style="yellow"
-        ))
-        
-        with console.status("[bold yellow]AI troubleshooting...", spinner="dots"):
-            troubleshoot_response = self.chat_with_ai(troubleshoot_prompt)
-        
-        console.print(Panel(
-            troubleshoot_response,
-            title="[bold blue]AI Troubleshooting Analysis[/bold blue]",
-            border_style="blue"
-        ))
-        
-        # Try to extract a corrected script from the response
-        if "```" in troubleshoot_response:
-            if Confirm.ask("[green]Would you like to try executing the corrected script?[/green]"):
-                self.extract_and_execute_script(troubleshoot_response, "troubleshooter")
+        return self.current_shell
     
-    def quick_troubleshoot(self, error_description: str):
-        """Quick troubleshooting for any error"""
-        console.print(Panel(
-            f"Analyzing: {error_description}",
-            title="[bold yellow]Quick Troubleshoot[/bold yellow]",
-            border_style="yellow"
-        ))
-        
-        troubleshoot_prompt = f"""
-        Help troubleshoot this issue: {error_description}
-        
-        Provide:
-        1. Likely causes
-        2. Step-by-step diagnostic commands
-        3. Specific solutions
-        4. Prevention tips
-        
-        Focus on practical, actionable advice.
-        """
-        
-        with console.status("[bold yellow]AI analyzing...", spinner="dots"):
-            response = self.chat_with_ai(troubleshoot_prompt)
-        
-        console.print(Panel(
-            response,
-            title="[bold blue]Troubleshooting Guide[/bold blue]",
-            border_style="blue"
-        ))
+    def _show_result(self, result: Dict[str, Any], success_msg: str = "Command executed successfully"):
+        """Display command execution result"""
+        if result.get('cancelled'):
+            console.print("[yellow]Execution cancelled[/yellow]")
+        elif result.get('success'):
+            stdout = result.get('stdout', '').strip()
+            if stdout:
+                console.print(Panel(stdout, title="[green]Output[/green]", border_style="green"))
+            else:
+                console.print(f"[green]{success_msg}[/green]")
+        else:
+            error = result.get('stderr') or result.get('error') or "Unknown error"
+            console.print(Panel(error.strip(), title="[red]Error[/red]", border_style="red"))
+            return error.strip()
+        return None
     
-    def run_plugin(self, plugin_name: str, user_input: str = ""):
+    def generate_oneliner(self, task: str):
+        """Generate and execute one-liner command"""
+        shell_contexts = {
+            "powershell": "PowerShell cmdlets",
+            "bash": "bash/Unix utilities", 
+            "zsh": "zsh/Unix utilities",
+            "fish": "fish shell commands",
+            "cmd": "Windows CMD commands"
+        }
+        
+        context = shell_contexts.get(self.current_shell, "shell commands")
+        prompt = f"""Generate a single-line {context} command to: {task}
+
+Requirements:
+- Single line only
+- Use {self.current_shell} syntax
+- Production-ready and safe
+- Respond with ONLY the command (no explanation/markdown)"""
+        
+        console.print(Panel(f"Generating {self.current_shell.upper()} command for: {task}",
+                          title="[cyan]Command Generator[/cyan]", border_style="cyan"))
+        
+        with console.status("[yellow]AI generating...", spinner="dots"):
+            response = self._chat_with_ai(prompt).strip()
+        
+        command = self._extract_clean_command(response)
+        
+        if command:
+            console.print(Panel(Syntax(command, self.current_shell, theme="monokai"),
+                              title=f"[bold]Generated {self.current_shell.upper()} Command[/bold]",
+                              border_style="green"))
+            
+            result = self._execute_command(command, self.current_shell)
+            error = self._show_result(result)
+            
+            if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
+                self._troubleshoot_error(command, error, task)
+        else:
+            console.print("[red]Could not extract valid command from AI response[/red]")
+    
+    def _troubleshoot_error(self, command: str, error: str, task: str):
+        """AI troubleshooting for failed commands"""
+        prompt = f"""A {self.current_shell} command failed. Provide ONLY a corrected command.
+
+Original Task: {task}
+Failed Command: {command}
+Error: {error}
+Shell: {self.current_shell}
+Platform: {self.platform}
+
+Respond with ONLY the corrected command (no explanation/markdown)."""
+        
+        console.print(Panel("🔍 AI troubleshooting...", title="[yellow]Troubleshooting[/yellow]", border_style="yellow"))
+        
+        with console.status("[yellow]Analyzing...", spinner="dots"):
+            response = self._chat_with_ai(prompt).strip()
+        
+        corrected = self._extract_clean_command(response)
+        
+        if corrected:
+            console.print(Panel(Syntax(corrected, self.current_shell, theme="monokai"),
+                              title="[blue]Corrected Command[/blue]", border_style="blue"))
+            
+            if Confirm.ask("[green]Try corrected command?[/green]"):
+                result = self._execute_command(corrected, self.current_shell)
+                self._show_result(result, "Corrected command successful!")
+    
+    def run_plugin(self, plugin_name: str):
         """Execute a plugin"""
         plugin = self.plugin_manager.get_plugin(plugin_name)
         if not plugin:
             console.print(f"[red]Plugin '{plugin_name}' not found[/red]")
             return
         
-        # Get plugin parameters
-        parameters = plugin.get('parameters', {})
+        # Collect parameter values
         values = {}
-        
-        for param_name, param_config in parameters.items():
-            if param_name not in values:
-                prompt_text = param_config.get('prompt', f"Enter {param_name}")
-                default = param_config.get('default')
-                
-                if param_config.get('type') == 'file':
-                    # File input
-                    file_path = Prompt.ask(prompt_text)
-                    if os.path.exists(file_path):
-                        with open(file_path, 'r') as f:
-                            values[param_name] = f.read()
-                    else:
-                        console.print(f"[red]File not found: {file_path}[/red]")
-                        return
+        for param_name, config in plugin.get('parameters', {}).items():
+            prompt_text = config.get('prompt', f"Enter {param_name}")
+            
+            if config.get('type') == 'file':
+                file_path = Prompt.ask(prompt_text)
+                if os.path.exists(file_path):
+                    with open(file_path, 'r') as f:
+                        values[param_name] = f.read()
                 else:
-                    # Regular input - use current shell as default for script_type
-                    if param_name == 'script_type' and not param_config.get('default'):
-                        default_value = self.current_shell
-                    else:
-                        default_value = param_config.get('default')
-                    
-                    user_value = Prompt.ask(prompt_text, default=default_value)
-                    values[param_name] = user_value or user_input or default_value
+                    console.print(f"[red]File not found: {file_path}[/red]")
+                    return
+            else:
+                default = config.get('default')
+                if param_name == 'script_type' and not default:
+                    default = self.current_shell
+                values[param_name] = Prompt.ask(prompt_text, default=default)
         
-        # Build the AI prompt
+        # Build and execute AI prompt
         ai_prompt = plugin['prompt'].format(**values)
+        context = plugin.get('context', '').format(**values) if plugin.get('context') else ''
         
-        # Add context if specified
-        context = plugin.get('context', '')
-        if context:
-            context = context.format(**values)
+        console.print(Panel(f"[bold]Plugin:[/bold] {plugin_name}\n"
+                          f"[bold]Description:[/bold] {plugin.get('description', 'N/A')}\n"
+                          f"[bold]Category:[/bold] {plugin.get('category', 'general')}",
+                          title="[cyan]Executing Plugin[/cyan]", border_style="blue"))
         
-        # Show what we're doing
-        console.print(Panel(
-            f"[bold]Plugin:[/bold] {plugin_name}\n"
-            f"[bold]Description:[/bold] {plugin.get('description', 'No description')}\n"
-            f"[bold]Category:[/bold] {plugin.get('category', 'general')}",
-            title="[bold cyan]Executing Plugin[/bold cyan]",
-            border_style="blue"
-        ))
+        with console.status("[yellow]AI processing...", spinner="dots"):
+            ai_response = self._chat_with_ai(ai_prompt, context)
         
-        # Get AI response
-        with console.status("[bold yellow]AI is processing...", spinner="dots"):
-            ai_response = self.chat_with_ai(ai_prompt, context)
-        
-        # Display result
-        console.print(Panel(
-            ai_response,
-            title=f"[bold green]AI Response - {plugin_name}[/bold green]",
-            border_style="green"
-        ))
+        console.print(Panel(ai_response, title=f"[green]AI Response - {plugin_name}[/green]", border_style="green"))
         
         # Handle post-processing
-        post_process = plugin.get('post_process')
-        if post_process:
-            if post_process.get('type') == 'execute':
-                # Extract and execute commands
-                self.extract_and_execute_script(ai_response, plugin_name)
+        if plugin.get('post_process', {}).get('type') == 'execute':
+            self._extract_and_execute(ai_response, plugin_name)
+    
+    def _extract_and_execute(self, response: str, plugin_name: str):
+        """Extract and execute code from AI response"""
+        # Find code blocks
+        code_pattern = r'```(?:(\w+))?\s*(.*?)```'
+        matches = re.findall(code_pattern, response, re.DOTALL | re.IGNORECASE)
+        
+        code, language = None, None
+        
+        if matches:
+            for lang, extracted in matches:
+                if len(extracted.strip()) > 5:
+                    code, language = extracted.strip(), lang.lower() if lang else None
+                    break
+        
+        # Try raw command extraction for command plugins
+        if not code and plugin_name in ['cmd_generator', 'quick_command', 'file_operations']:
+            code = self._extract_clean_command(response)
+            language = self.current_shell
+        
+        if code:
+            language = language or self._detect_language(code)
+            
+            console.print(Panel(Syntax(code, language, theme="monokai", line_numbers=True),
+                              title=f"[bold]Extracted {language.title()} Code[/bold]", border_style="yellow"))
+            
+            result = self._execute_command(code, language)
+            error = self._show_result(result)
+            
+            if error and Confirm.ask("[yellow]AI troubleshoot this error?[/yellow]"):
+                self._troubleshoot_script_error(code, error, language)
+        else:
+            console.print("[yellow]No executable code found in response[/yellow]")
+    
+    def _troubleshoot_script_error(self, code: str, error: str, language: str):
+        """Troubleshoot script errors with AI"""
+        prompt = f"""A {language} script failed. Analyze and provide:
+1. Root cause analysis
+2. Corrected script
+3. Alternative approaches
+
+**Script:**
+```{language}
+{code}
+```
+
+**Error:** {error}"""
+        
+        console.print(Panel("🔍 AI analyzing error...", title="[yellow]Troubleshooting[/yellow]", border_style="yellow"))
+        
+        with console.status("[yellow]Troubleshooting...", spinner="dots"):
+            response = self._chat_with_ai(prompt)
+        
+        console.print(Panel(response, title="[blue]Troubleshooting Analysis[/blue]", border_style="blue"))
+        
+        if "```" in response and Confirm.ask("[green]Try corrected script?[/green]"):
+            self._extract_and_execute(response, "troubleshooter")
+    
+    def quick_troubleshoot(self, issue: str):
+        """Quick AI troubleshooting"""
+        prompt = f"""Troubleshoot: {issue}
+
+Provide:
+1. Likely causes
+2. Diagnostic commands  
+3. Solutions
+4. Prevention tips
+
+Focus on actionable advice."""
+        
+        console.print(Panel(f"Analyzing: {issue}", title="[yellow]Quick Troubleshoot[/yellow]", border_style="yellow"))
+        
+        with console.status("[yellow]AI analyzing...", spinner="dots"):
+            response = self._chat_with_ai(prompt)
+        
+        console.print(Panel(response, title="[blue]Troubleshooting Guide[/blue]", border_style="blue"))
     
     def show_plugins(self):
-        """Display available plugins in a nice table"""
+        """Display available plugins"""
         table = Table(title="Available Plugins")
         table.add_column("Name", style="cyan", no_wrap=True)
         table.add_column("Category", style="magenta")
         table.add_column("Description", style="green")
         
-        for plugin_name in self.plugin_manager.list_plugins():
-            info = self.plugin_manager.get_plugin_info(plugin_name)
-            table.add_row(
-                plugin_name,
-                info.get('category', 'general'),
-                info.get('description', 'No description')
-            )
+        for name in self.plugin_manager.list_plugins():
+            info = self.plugin_manager.get_plugin_info(name)
+            table.add_row(name, info.get('category', 'general'), info.get('description', 'N/A'))
         
         console.print(table)
     
-    def show_system_status(self):
+    def show_status(self):
         """Show system status with AI analysis"""
-        # Get system stats
-        cpu_percent = psutil.cpu_percent(interval=1)
+        cpu = psutil.cpu_percent(interval=1)
         memory = psutil.virtual_memory()
         disk = psutil.disk_usage('/')
         
-        # Create system table
         table = Table(title="System Status")
         table.add_column("Metric", style="cyan")
-        table.add_column("Value", style="magenta")
+        table.add_column("Value", style="magenta") 
         table.add_column("Status", justify="center")
         
-        table.add_row("CPU Usage", f"{cpu_percent:.1f}%", "🟢" if cpu_percent < 80 else "🔴")
+        table.add_row("CPU", f"{cpu:.1f}%", "🟢" if cpu < 80 else "🔴")
         table.add_row("Memory", f"{memory.percent:.1f}%", "🟢" if memory.percent < 80 else "🔴")
         table.add_row("Disk", f"{disk.percent:.1f}%", "🟢" if disk.percent < 90 else "🔴")
+        table.add_row("OS", f"{self.system_info.os_name}", "ℹ️")
+        table.add_row("Shell", f"{self.current_shell.upper()}", "ℹ️")
         
-        # Get AI analysis
-        with console.status("[bold yellow]AI analyzing system...", spinner="dots"):
-            analysis_prompt = f"""
-            Analyze these system metrics and provide brief recommendations:
-            - CPU: {cpu_percent:.1f}%
-            - Memory: {memory.percent:.1f}%
-            - Disk: {disk.percent:.1f}%
-            
-            Provide 2-3 bullet points with actionable advice.
-            """
-            ai_analysis = self.chat_with_ai(analysis_prompt)
+        with console.status("[yellow]AI analyzing...", spinner="dots"):
+            analysis = self._chat_with_ai(f"""Analyze system metrics and provide 2-3 actionable recommendations:
+- CPU: {cpu:.1f}%
+- Memory: {memory.percent:.1f}%  
+- Disk: {disk.percent:.1f}%
+- Current Shell: {self.current_shell}
+
+Focus on {self.system_info.os_name}-specific optimizations.""")
         
-        # Display results
-        layout = Columns([
-            Panel(table, title="[bold]Metrics[/bold]"),
-            Panel(ai_analysis, title="[bold]AI Analysis[/bold]", width=50)
-        ])
+        console.print(Columns([
+            Panel(table, title="[bold]System Metrics[/bold]"),
+            Panel(analysis, title="[bold]AI Analysis[/bold]", width=50)
+        ]))
         
-        console.print(layout)
+        # Show available tools
+        available_tools = [tool for tool, available in self.system_info.available_tools.items() if available]
+        console.print(f"\n[dim]Available tools: {', '.join(available_tools)}[/dim]")
     
-    def interactive_shell(self):
+    def run(self):
         """Main interactive shell"""
-        console.print(Panel(
-            "[bold green]AI Fabric Shell[/bold green]\n"
-            f"Model: {self.model}\n"
-            f"Shell: {self.current_shell.upper()}\n"
-            f"Platform: {self.platform.title()}\n"
-            f"Plugins: {len(self.plugin_manager.list_plugins())}\n\n"
-            "Commands:\n"
-            "  • [cyan]list[/cyan] - Show available plugins\n"
-            "  • [cyan]run <plugin>[/cyan] - Run a plugin\n"
-            "  • [cyan]cmd <task>[/cyan] - Generate & execute one-liner command\n"
-            "  • [cyan]status[/cyan] - Show system status\n"
-            "  • [cyan]chat[/cyan] - Free-form AI chat\n"
-            "  • [cyan]troubleshoot <issue>[/cyan] - Quick AI troubleshooting\n"
-            "  • [cyan]help[/cyan] - Show this help\n"
-            "  • [cyan]quit[/cyan] - Exit",
-            title="[bold cyan]Welcome[/bold cyan]",
-            border_style="blue"
-        ))
+        welcome = f"""[bold green]AI Fabric Shell[/bold green]
+Model: {self.model} | Shell: {self.current_shell.upper()} | Platform: {self.platform.title()}
+Plugins: {len(self.plugin_manager.list_plugins())}
+
+Commands:
+• [cyan]list[/cyan] - Show plugins
+• [cyan]run <plugin>[/cyan] - Execute plugin  
+• [cyan]cmd <task>[/cyan] - Generate command
+• [cyan]status[/cyan] - System status
+• [cyan]chat[/cyan] - AI chat mode
+• [cyan]troubleshoot <issue>[/cyan] - Quick troubleshooting
+• [cyan]help[/cyan] - Show help
+• [cyan]quit[/cyan] - Exit"""
+        
+        console.print(Panel(welcome, title="[cyan]Welcome[/cyan]", border_style="blue"))
         
         while True:
             try:
-                command = Prompt.ask("\n[bold cyan]fabric>[/bold cyan]")
+                # Use cross-platform prompt with completion
+                cmd = self.prompt_handler.ask_with_completion("fabric>")
                 
-                if command.lower() in ['quit', 'exit', 'q']:
+                if not cmd:
+                    continue
+                
+                # Check for built-in commands first
+                if cmd.lower() in ['quit', 'exit', 'q']:
                     console.print("[yellow]Goodbye![/yellow]")
                     break
-                
-                elif command.lower() in ['help', 'h']:
-                    console.print(Panel(
-                        "Available commands:\n"
-                        "  • [cyan]list[/cyan] - Show available plugins\n"
-                        "  • [cyan]run <plugin>[/cyan] - Run a plugin\n"
-                        "  • [cyan]cmd <task>[/cyan] - Generate & execute one-liner command\n"
-                        "  • [cyan]status[/cyan] - Show system status\n"
-                        "  • [cyan]chat[/cyan] - Free-form AI chat\n"
-                        "  • [cyan]troubleshoot <issue>[/cyan] - Quick AI troubleshooting\n"
-                        "  • [cyan]help[/cyan] - Show this help\n"
-                        "  • [cyan]quit[/cyan] - Exit\n\n"
-                        f"Current shell: {self.current_shell.upper()}",
-                        title="[bold]Help[/bold]",
-                        border_style="blue"
-                    ))
-                
-                elif command.lower() in ['list', 'ls']:
+                elif cmd.lower() in ['help', 'h']:
+                    console.print(Panel(welcome, title="[bold]Help[/bold]", border_style="blue"))
+                elif cmd.lower() in ['list', 'ls']:
                     self.show_plugins()
-                
-                elif command.lower() == 'status':
-                    self.show_system_status()
-                
-                elif command.lower() == 'chat':
-                    console.print("[yellow]Entering chat mode (type 'back', 'exit', or 'quit' to return)[/yellow]")
-                    while True:
-                        chat_input = Prompt.ask("[bold green]chat>[/bold green]")
-                        if chat_input.lower() in ['back', 'exit', 'quit', 'q']:
-                            break
-                        
-                        with console.status("[bold yellow]AI thinking...", spinner="dots"):
-                            response = self.chat_with_ai(chat_input)
-                        
-                        console.print(Panel(response, border_style="green"))
-                
-                elif command.startswith('run '):
-                    plugin_name = command[4:].strip()
-                    self.run_plugin(plugin_name)
-                
-                elif command.startswith('cmd '):
-                    # One-liner command generator
-                    task = command[4:].strip()
-                    if not task:
-                        task = Prompt.ask("Describe what you want to do")
+                elif cmd.lower() == 'status':
+                    self.show_status()
+                elif cmd.lower() == 'chat':
+                    self._chat_mode()
+                elif cmd.startswith('run '):
+                    plugin_name = cmd[4:].strip()
+                    if plugin_name:
+                        self.run_plugin(plugin_name)
+                    else:
+                        console.print("[yellow]Usage: run <plugin_name>[/yellow]")
+                        console.print("Available plugins:")
+                        self.show_plugins()
+                elif cmd.startswith('cmd '):
+                    task = cmd[4:].strip() or Prompt.ask("Describe task")
                     self.generate_oneliner(task)
-                
-                elif command.startswith('troubleshoot ') or command.startswith('fix '):
-                    # Quick troubleshooting command
-                    error_description = command.split(' ', 1)[1] if ' ' in command else ""
-                    if not error_description:
-                        error_description = Prompt.ask("Describe the error or issue")
-                    
-                    self.quick_troubleshoot(error_description)
-                
+                elif cmd.startswith(('troubleshoot ', 'fix ')):
+                    issue = cmd.split(' ', 1)[1] if ' ' in cmd else Prompt.ask("Describe issue")
+                    self.quick_troubleshoot(issue)
                 else:
-                    console.print(f"[red]Unknown command: {command}[/red]")
-                    console.print("Type 'help' for available commands")
+                    # Unknown command - try passing through to shell
+                    console.print(f"[yellow]Unknown fabric command. Trying as {self.current_shell} command...[/yellow]")
+                    self._handle_unknown_command(cmd)
             
             except KeyboardInterrupt:
                 console.print("\n[yellow]Use 'quit' to exit[/yellow]")
             except Exception as e:
                 console.print(f"[red]Error: {e}[/red]")
+    
+    def _chat_mode(self):
+        """Interactive chat mode with completion"""
+        console.print("[yellow]Chat mode (type 'back'/'exit'/'quit' to return)[/yellow]")
+        while True:
+            try:
+                user_input = self.prompt_handler.ask_with_completion("chat>")
+                if user_input.lower() in ['back', 'exit', 'quit', 'q']:
+                    break
+                
+                if not user_input.strip():
+                    continue
+                
+                with console.status("[yellow]AI thinking...", spinner="dots"):
+                    response = self._chat_with_ai(user_input)
+                
+                console.print(Panel(response, border_style="green"))
+            except KeyboardInterrupt:
+                break
 
 def main():
-    """Main entry point"""
+    """Entry point"""
     try:
-        app = AIFabricShell()
-        app.interactive_shell()
+        AIFabricShell().run()
     except KeyboardInterrupt:
         console.print("\n[yellow]Goodbye![/yellow]")
 
