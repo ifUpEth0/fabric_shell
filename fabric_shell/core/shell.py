@@ -1,5 +1,5 @@
 """
-Updated main AI Fabric Shell application class with enhanced command handling
+Updated main AI Fabric Shell application class with enhanced command handling and fixed confirmation flow
 """
 
 import os
@@ -283,10 +283,10 @@ Format your response with clear sections and use code blocks for commands."""
         corrected = self.text_extractor.extract_clean_command(response)
         
         if corrected and Confirm.ask("[green]Try corrected command?[/green]"):
+            # Use execute_command_with_options which handles its own confirmation flow
             result = self.command_executor.execute_command_with_options(
                 corrected, f"Fixed: {task}", self.current_shell, self._chat_with_ai
             )
-            self.command_executor.show_result(result, "Corrected command executed successfully!")
     
     def run_plugin(self, plugin_name: str):
         """Execute a plugin with optimal model selection"""
@@ -466,6 +466,7 @@ Use proper code blocks and clear explanations."""
         
         code_blocks = self.text_extractor.extract_code_blocks(response)
         if code_blocks and Confirm.ask("[green]Try corrected script?[/green]"):
+            # Use _extract_and_execute which has its own confirmation flow
             self._extract_and_execute(response, "troubleshooter")
     
     def quick_troubleshoot(self, issue: str):
@@ -551,10 +552,10 @@ Format your response with clear sections and code blocks for any commands."""
         # Try to extract a corrected command
         corrected = self.text_extractor.extract_clean_command(response)
         if corrected and corrected != command:
+            # Use execute_command_with_options which handles its own confirmation flow
             result = self.command_executor.execute_command_with_options(
                 corrected, f"Fix for: {command}", self.current_shell, self._chat_with_ai
             )
-            self.command_executor.show_result(result, "Fixed command executed successfully!")
     
     def show_plugins(self, category: str = None):
         """Display available plugins, optionally filtered by category"""
@@ -849,6 +850,7 @@ history
 - 📋 **Enhanced Command Options** - Y/N/E prompts with AI explanations
 - 📚 **Command History & Learning** - Past successes inform future suggestions
 - 🔍 **Better Troubleshooting** - Enhanced error analysis and fixes
+- 🛡️ **Fixed PowerShell Execution** - Improved compatibility and error handling
 """
         
         # Use the enhanced Markdown renderer for help
@@ -884,6 +886,7 @@ history
 - 🎨 **Rich Markdown Rendering** - AI responses with proper formatting
 - 📊 **Smart Model Recommendations** - Optimal model suggestions by task type
 - 🔧 **Plugin-Model Optimization** - Plugins automatically select best models
+- 🛡️ **Fixed PowerShell Support** - Improved Windows PowerShell compatibility
 
 ## Quick Start
 
